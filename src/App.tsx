@@ -1,35 +1,44 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from "react";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [connected, setConnected] = useState(false);
+  const [status, setStatus] = useState("Checking backend connection...");
+
+  useEffect(() => {
+    fetch("http://localhost:3001/health")
+      .then((res) => {
+        if (!res.ok) throw new Error("Backend error");
+        return res.json();
+      })
+      .then(() => {
+        setConnected(true);
+        setStatus("Backend connected successfully");
+      })
+      .catch(() => {
+        setConnected(false);
+        setStatus("Backend not reachable");
+      });
+  }, []);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center px-6">
+      
+      <div
+        className={`mb-8 px-5 py-2 rounded-md text-sm font-medium ${
+          connected ? "bg-green-700 text-green-100" : "bg-red-700 text-red-100"
+        }`}
+      >
+        {status}
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
 
-export default App
+      <h1 className="text-3xl md:text-4xl font-semibold text-white text-center">
+        User Management Application
+      </h1>
+
+      <p className="mt-3 text-gray-400 text-center max-w-md">
+        A scalable platform for managing users, roles, and permissions.
+      </p>
+
+    </div>
+  );
+}
