@@ -3,13 +3,13 @@
 This is the frontend application for the User Management project.  
 Week 1 focuses on setting up the project structure and ensuring the application runs locally.
 
-## Tech Stack
+Tech Stack:
 - React
 - TypeScript
 - Vite
 - Tailwind CSS
 
-## Purpose 
+Purpose:
 - Initialize React + TypeScript project
 - Configure Tailwind CSS
 - Verify frontend runs successfully
@@ -17,9 +17,9 @@ Week 1 focuses on setting up the project structure and ensuring the application 
 
 No backend integration or business logic is implemented in this phase.
 
-### Prerequisites
+Prerequisites:
 - Node.js (v18 or above recommended)
 - npm
 
-### Installation
+Installation:
 npm install
