@@ -9,7 +9,7 @@ Week 1 focuses on setting up the project structure and ensuring the application 
 - Vite
 - Tailwind CSS
 
-## Purpose (Week 1)
+## Purpose 
 - Initialize React + TypeScript project
 - Configure Tailwind CSS
 - Verify frontend runs successfully
@@ -17,12 +17,9 @@ Week 1 focuses on setting up the project structure and ensuring the application 
 
 No backend integration or business logic is implemented in this phase.
 
-## Getting Started
-
 ### Prerequisites
 - Node.js (v18 or above recommended)
 - npm
 
 ### Installation
-```bash
 npm install
