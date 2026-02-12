@@ -32,13 +32,6 @@ export default function App() {
         User Management Application
       </h1>
 
-      <p className="mt-3 text-gray-400 text-center max-w-md">
-        Frontend and backend integration verified using Axios.
-      </p>
-
-      <p className="mt-10 text-xs text-gray-500">
-        Week 1 · Integration Demo
-      </p>
     </div>
   );
 }
