@@ -1,24 +1,30 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-axios.get(`${API_BASE_URL}/health`)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
 export default function App() {
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState("Checking backend connection...");
 
   useEffect(() => {
-    axios
-      .get("http://localhost:3001/health")
-      .then(() => {
-        setConnected(true);
-        setStatus("Backend connected successfully");
-      })
-      .catch(() => {
+    const checkHealth = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/health`);
+        if (response.ok) {
+          setConnected(true);
+          setStatus("Backend connected successfully");
+        } else {
+          setConnected(false);
+          setStatus("Backend not reachable");
+        }
+      } catch (error) {
         setConnected(false);
         setStatus("Backend not reachable");
-      });
+        console.error("Health check failed:", error);
+      }
+    };
+
+    checkHealth();
   }, []);
 
   return (
@@ -34,7 +40,6 @@ export default function App() {
       <h1 className="text-3xl font-semibold text-white text-center">
         User Management Application
       </h1>
-
     </div>
   );
 }
