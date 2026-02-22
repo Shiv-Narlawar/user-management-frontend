@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+import { API_BASE_URL, ENDPOINTS } from "./config";
 
 export default function App() {
   const [connected, setConnected] = useState(false);
@@ -9,7 +8,7 @@ export default function App() {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/health`);
+        const response = await fetch(`${API_BASE_URL}${ENDPOINTS.HEALTH}`);
         if (response.ok) {
           setConnected(true);
           setStatus("Backend connected successfully");
