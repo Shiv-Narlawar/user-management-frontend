@@ -1,26 +1,23 @@
-const BASE_URL = "http://localhost:7000/api";
+export const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:7000/api";
 
-function getAccessToken() {
+function getAccessToken(): string | null {
   return localStorage.getItem("accessToken");
 }
 
-function getRefreshToken() {
-  return localStorage.getItem("refreshToken");
-}
-
-function setTokens(access: string, refresh?: string) {
-  localStorage.setItem("accessToken", access);
-  if (refresh) localStorage.setItem("refreshToken", refresh);
-}
-
-function clearTokens() {
+function clearTokens(): void {
   localStorage.removeItem("accessToken");
   localStorage.removeItem("refreshToken");
 }
 
-async function refreshAccessToken() {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) throw new Error("No refresh token");
+type RefreshResponse = {
+  token?: string;
+  refreshToken?: string;
+};
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem("refreshToken");
+  if (!refreshToken) return null;
 
   const res = await fetch(`${BASE_URL}/auth/refresh`, {
     method: "POST",
@@ -28,30 +25,47 @@ async function refreshAccessToken() {
     body: JSON.stringify({ refreshToken }),
   });
 
-  if (!res.ok) {
-    clearTokens();
-    throw new Error("Refresh failed");
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as RefreshResponse;
+
+  if (!data.token) return null;
+
+  localStorage.setItem("accessToken", data.token);
+  if (data.refreshToken) {
+    localStorage.setItem("refreshToken", data.refreshToken);
   }
 
-  const data = await res.json();
-  setTokens(data.token, data.refreshToken);
   return data.token;
 }
 
-export async function apiFetch(
+function isAuthEndpoint(endpoint: string): boolean {
+  return (
+    endpoint.startsWith("/auth/login") ||
+    endpoint.startsWith("/auth/signup") ||
+    endpoint.startsWith("/auth/refresh") ||
+    endpoint.startsWith("/auth/logout") ||
+    endpoint.startsWith("/auth/forgot-password") ||
+    endpoint.startsWith("/auth/reset-password")
+  );
+}
+
+export async function apiFetch<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
-) {
+): Promise<T> {
   const accessToken = getAccessToken();
 
-  const headers = new Headers(options.headers);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
 
-  if (!headers.has("Content-Type") && options.body) {
-    headers.set("Content-Type", "application/json");
+  if (options.headers) {
+    Object.assign(headers, options.headers as Record<string, string>);
   }
 
   if (accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
+    headers.Authorization = `Bearer ${accessToken}`;
   }
 
   let response = await fetch(`${BASE_URL}${endpoint}`, {
@@ -59,11 +73,17 @@ export async function apiFetch(
     headers,
   });
 
-  // If token expired → refresh
-  if (response.status === 401) {
+  // Try refresh once if 401 and not auth endpoint
+  if (response.status === 401 && !isAuthEndpoint(endpoint)) {
     const newAccess = await refreshAccessToken();
 
-    headers.set("Authorization", `Bearer ${newAccess}`);
+    if (!newAccess) {
+      clearTokens();
+      window.location.href = "/login";
+      throw new Error("Session expired. Please login again.");
+    }
+
+    headers.Authorization = `Bearer ${newAccess}`;
 
     response = await fetch(`${BASE_URL}${endpoint}`, {
       ...options,
@@ -71,11 +91,26 @@ export async function apiFetch(
     });
   }
 
+  const contentType = response.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+
   if (!response.ok) {
-    throw new Error("Request failed");
+    const errorBody = isJson
+      ? await response.json()
+      : await response.text();
+
+    const message =
+      typeof errorBody === "string"
+        ? errorBody
+        : (errorBody as { message?: string })?.message ||
+          response.statusText;
+
+    throw new Error(message);
   }
 
-  return response.json();
-}
+  if (response.status === 204) {
+    return undefined as T;
+  }
 
-export { setTokens, clearTokens };
+  return (isJson ? await response.json() : await response.text()) as T;
+}

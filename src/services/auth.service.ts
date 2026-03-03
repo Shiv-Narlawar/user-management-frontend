@@ -1,16 +1,9 @@
+import { apiFetch } from "../lib/api";
+import type { Role, UserRow } from "../types/rbac";
 
-import { apiFetch } from "../lib/apiFetch";
-
-export type Role = "ADMIN" | "MANAGER" | "USER";
-
-export interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  status?: string;
+export type AuthUser = UserRow & {
   permissions?: string[];
-}
+};
 
 export interface AuthResponse {
   token?: string;
@@ -18,6 +11,9 @@ export interface AuthResponse {
   user?: AuthUser;
   message?: string;
 }
+
+export type LoginResponse = AuthResponse & { token: string; user: AuthUser };
+export type SignupResponse = AuthResponse & { token: string; user: AuthUser };
 
 function setTokens(token: string, refreshToken?: string) {
   localStorage.setItem("accessToken", token);
@@ -28,30 +24,34 @@ export async function signup(payload: {
   name: string;
   email: string;
   password: string;
-  role: "USER" | "MANAGER";
-}): Promise<AuthResponse> {
+  role: Extract<Role, "USER" | "MANAGER">;
+}): Promise<SignupResponse> {
   const result = (await apiFetch("/auth/signup", {
     method: "POST",
     body: JSON.stringify(payload),
   })) as AuthResponse;
 
-  
-  return result;
+  if (!result.token) throw new Error("Signup failed: token missing");
+  if (!result.user) throw new Error("Signup failed: user missing");
+
+  setTokens(result.token, result.refreshToken);
+  return result as SignupResponse;
 }
 
 export async function login(payload: {
   email: string;
   password: string;
-}): Promise<AuthResponse> {
+}): Promise<LoginResponse> {
   const result = (await apiFetch("/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   })) as AuthResponse;
 
   if (!result.token) throw new Error("Login failed: token missing");
+  if (!result.user) throw new Error("Login failed: user missing");
 
   setTokens(result.token, result.refreshToken);
-  return result;
+  return result as LoginResponse;
 }
 
 export async function logout(refreshToken: string | null): Promise<void> {
@@ -63,7 +63,7 @@ export async function logout(refreshToken: string | null): Promise<void> {
       });
     }
   } catch {
-    // ignore logout errors; frontend already clears tokens in AuthContext
+    // ignore logout errors;
   }
 }
 
@@ -88,19 +88,9 @@ export async function requestPasswordReset(email: string): Promise<AuthResponse>
 
 export async function resetPassword(payload: {
   email: string;
-  code: string;
   newPassword: string;
 }): Promise<AuthResponse> {
   return (await apiFetch("/auth/reset-password", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  })) as AuthResponse;
-}
-
-export async function forgotUsername(payload: {
-  email: string;
-}): Promise<AuthResponse> {
-  return (await apiFetch("/auth/forgot-username", {
     method: "POST",
     body: JSON.stringify(payload),
   })) as AuthResponse;

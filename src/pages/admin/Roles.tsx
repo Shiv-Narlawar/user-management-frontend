@@ -1,110 +1,167 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
-import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
-import { Modal } from "../../components/ui/Modal";
 import { useToast } from "../../context/ToastContext";
-import type { RoleNode } from "../../types/rbac";
-import { createRole, fetchRoles, updateRole } from "../../services/roles.service";
+import { apiFetch } from "../../lib/api";
 
-const demoRoles: RoleNode[] = [
-  { id: 1, name: "Admin", parentRoleId: null, childRoleIds: [2, 3] },
-  { id: 2, name: "Manager", parentRoleId: 1, childRoleIds: [3] },
-  { id: 3, name: "User", parentRoleId: 2, childRoleIds: [] }
-];
+interface RoleRow {
+  id: string;
+  name: string; // ADMIN / MANAGER / USER or custom
+}
+
+type RolesResponse = { data: RoleRow[] } | RoleRow[];
 
 export default function Roles() {
-  const toast = useToast();
-  const [roles, setRoles] = useState<RoleNode[]>([]);
-  const [demoMode, setDemoMode] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [edit, setEdit] = useState<RoleNode | null>(null);
-  const [name, setName] = useState("");
-  const [parentRoleId, setParentRoleId] = useState<string>("");
-  const [childRoleIds, setChildRoleIds] = useState<string[]>([]);
+  const { push } = useToast();
 
-  async function load() {
-    try { const data = await fetchRoles(); setRoles(data); setDemoMode(false); }
-    catch { setRoles(demoRoles); setDemoMode(true); }
-  }
-  useEffect(() => { load(); }, []);
-  const opts = useMemo(() => roles.map(r => ({ id: String(r.id), name: r.name })), [roles]);
+  const [roles, setRoles] = useState<RoleRow[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  function openCreate() { setEdit(null); setName(""); setParentRoleId(""); setChildRoleIds([]); setOpen(true); }
-  function openEdit(r: RoleNode) { setEdit(r); setName(r.name); setParentRoleId(r.parentRoleId ? String(r.parentRoleId) : ""); setChildRoleIds((r.childRoleIds ?? []).map(String)); setOpen(true); }
+  const [name, setName] = useState<string>("");
+  const [creating, setCreating] = useState<boolean>(false);
 
-  async function save() {
+  async function load(): Promise<void> {
+    setLoading(true);
     try {
-      if (!edit) {
-        const created = await createRole({ name, parentRoleId: parentRoleId || null, childRoleIds });
-        setRoles((x) => [created, ...x]);
-        toast.push("success","Role created");
-      } else {
-        const updated = await updateRole(edit.id, { name, parentRoleId: parentRoleId || null, childRoleIds });
-        setRoles((x) => x.map(r => r.id === edit.id ? updated : r));
-        toast.push("success","Role updated");
-      }
+      const res = (await apiFetch("/roles")) as RolesResponse;
+      const list = Array.isArray(res) ? res : res.data ?? [];
+      setRoles(list);
     } catch {
-      if (!edit) setRoles((x) => [{ id: Date.now(), name, parentRoleId: parentRoleId || null, childRoleIds }, ...x]);
-      else setRoles((x) => x.map(r => r.id === edit.id ? { ...r, name, parentRoleId: parentRoleId || null, childRoleIds } : r));
-      toast.push("info","Backend not connected — saved locally (demo).");
-    } finally { setOpen(false); }
+      push("error", "Failed to load roles");
+      setRoles([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function create(): Promise<void> {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      push("error", "Role name is required");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      await apiFetch("/roles", {
+        method: "POST",
+        body: JSON.stringify({ name: trimmed }),
+      });
+
+      push("success", "Role created");
+      setName("");
+      await load();
+    } catch {
+      push("error", "Role create failed");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function remove(roleId: string): Promise<void> {
+    const ok = window.confirm("Delete this role?");
+    if (!ok) return;
+
+    try {
+      await apiFetch(`/roles/${roleId}`, { method: "DELETE" });
+      push("success", "Role deleted");
+      await load();
+    } catch {
+      push("error", "Role delete failed");
+    }
   }
 
   return (
     <div className="space-y-5">
       <Card className="p-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="text-blue-300 text-sm font-semibold tracking-widest">ADMIN</div>
-            <div className="text-4xl font-extrabold mt-2">Role Hierarchy</div>
-            <div className="text-slate-400 mt-2">{demoMode ? "Demo mode." : "Connected to backend."}</div>
+            <div className="text-blue-300 text-sm font-semibold tracking-widest">
+              ADMIN
+            </div>
+            <div className="text-4xl font-extrabold mt-2">Roles</div>
+            <div className="text-slate-400 mt-2">
+              Create/delete roles. Permission assignment is managed in{" "}
+              <span className="text-slate-200 font-semibold">Permissions</span>.
+            </div>
           </div>
-          <Button className="h-12 px-5 rounded-2xl" onClick={openCreate}>Create Role</Button>
+
+          <div className="flex items-center gap-3">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="New role name (e.g. SUPPORT)"
+              className="w-72"
+            />
+            <Button onClick={create} disabled={creating}>
+              {creating ? "Creating…" : "Create"}
+            </Button>
+          </div>
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {roles.map(r => (
-          <Card key={String(r.id)} className="p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xl font-bold">{r.name}</div>
-                <div className="text-sm text-slate-400 mt-1">Parent: <span className="text-slate-200 font-semibold">{r.parentRoleId ? (opts.find(o => o.id===String(r.parentRoleId))?.name ?? "—") : "—"}</span></div>
-                <div className="text-sm text-slate-400 mt-1">Children: <span className="text-slate-200 font-semibold">{(r.childRoleIds ?? []).length ? (r.childRoleIds ?? []).map(id => opts.find(o => o.id===String(id))?.name ?? id).join(", ") : "—"}</span></div>
-              </div>
-              <Button variant="secondary" className="rounded-2xl" onClick={() => openEdit(r)}>Edit</Button>
-            </div>
-          </Card>
-        ))}
-      </div>
+      <Card className="p-0 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-950/40 border-b border-slate-800">
+            <tr className="text-slate-300">
+              <th className="px-6 py-3 text-left">Role</th>
+              <th className="px-6 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
 
-      <Modal open={open} title={edit ? "Edit Role" : "Create Role"} onClose={() => setOpen(false)}>
-        <div className="space-y-3">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Role name" />
-          <Select value={parentRoleId} onChange={(e) => setParentRoleId(e.target.value)}>
-            <option value="">No parent</option>
-            {opts.filter(o => !edit || o.id !== String(edit.id)).map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </Select>
-          <div className="text-sm font-semibold">Child Role(s)</div>
-          <div className="grid grid-cols-2 gap-2">
-            {opts.filter(o => !edit || o.id !== String(edit.id)).map(o => {
-              const checked = childRoleIds.includes(o.id);
-              return (
-                <label key={o.id} className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900/40 px-3 py-2">
-                  <input type="checkbox" checked={checked} onChange={(e) => setChildRoleIds(prev => e.target.checked ? [...prev,o.id] : prev.filter(x=>x!==o.id))} />
-                  <span className="text-sm">{o.name}</span>
-                </label>
-              );
-            })}
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save}>Save</Button>
-          </div>
-        </div>
-      </Modal>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td className="px-6 py-6 text-slate-400" colSpan={2}>
+                  Loading…
+                </td>
+              </tr>
+            ) : roles.length === 0 ? (
+              <tr>
+                <td className="px-6 py-6 text-slate-400" colSpan={2}>
+                  No roles found.
+                </td>
+              </tr>
+            ) : (
+              roles.map((r) => {
+                const isDefault =
+                  r.name === "ADMIN" || r.name === "MANAGER" || r.name === "USER";
+
+                return (
+                  <tr
+                    key={r.id}
+                    className="border-b border-slate-800/70 hover:bg-slate-900/25"
+                  >
+                    <td className="px-6 py-4 font-semibold">{r.name}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end">
+                        <Button
+                          variant="danger"
+                          onClick={() => remove(r.id)}
+                          disabled={isDefault}
+                          title={
+                            isDefault
+                              ? "Default roles cannot be deleted"
+                              : "Delete role"
+                          }
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }

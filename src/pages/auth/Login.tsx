@@ -17,7 +17,7 @@ type LoginForm = {
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const { push } = useToast(); // ✅ ToastContext has push()
   const { setUserFromAuth } = useAuth();
 
   const [form, setForm] = useState<LoginForm>({ email: "", password: "" });
@@ -39,12 +39,14 @@ export default function LoginPage() {
         password: form.password,
       });
 
+      // ✅ login() now guarantees user
       setUserFromAuth(res.user);
-      showToast("Login successful", "success");
+
+      push("success", "Login successful");
       navigate("/app/dashboard", { replace: true });
-    } catch (err) {
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Login failed";
-      showToast(msg, "error");
+      push("error", msg);
     } finally {
       setLoading(false);
     }
@@ -87,18 +89,22 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </Button>
 
+          {/* ✅ Forgot Username removed */}
           <div className="flex items-center justify-between text-sm">
-            <Link to="/forgot-password" className="text-blue-300 hover:text-blue-200">
+            <Link
+              to="/forgot-password"
+              className="text-blue-300 hover:text-blue-200"
+            >
               Forgot password?
-            </Link>
-            <Link to="/forgot-username" className="text-blue-300 hover:text-blue-200">
-              Forgot username?
             </Link>
           </div>
 
           <p className="text-sm text-slate-400">
             Don&apos;t have an account?{" "}
-            <Link to="/signup" className="text-blue-300 hover:text-blue-200 font-semibold">
+            <Link
+              to="/signup"
+              className="text-blue-300 hover:text-blue-200 font-semibold"
+            >
               Create one
             </Link>
           </p>

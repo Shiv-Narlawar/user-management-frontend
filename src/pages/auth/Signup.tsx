@@ -37,7 +37,7 @@ function passwordLabel(score: number): { label: string; cls: string } {
 
 export default function SignupPage() {
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const { push } = useToast(); // ✅ ToastContext uses push()
   const { setUserFromAuth } = useAuth();
 
   const [form, setForm] = useState<SignupForm>({
@@ -55,7 +55,10 @@ export default function SignupPage() {
   const onChange =
     <K extends keyof SignupForm>(key: K) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>): void => {
-      setForm((prev) => ({ ...prev, [key]: e.target.value as SignupForm[K] }));
+      setForm((prev) => ({
+        ...prev,
+        [key]: e.target.value as SignupForm[K],
+      }));
     };
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -70,12 +73,16 @@ export default function SignupPage() {
         role: form.role,
       });
 
+      // ✅ res.user is optional in AuthResponse, so guard it
+      if (!res.user) throw new Error("Signup failed: user missing");
+
       setUserFromAuth(res.user);
-      showToast("Account created", "success");
+
+      push("success", "Account created");
       navigate("/app/dashboard", { replace: true });
-    } catch (err) {
+    } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Signup failed";
-      showToast(msg, "error");
+      push("error", msg);
     } finally {
       setLoading(false);
     }
@@ -151,7 +158,10 @@ export default function SignupPage() {
 
           <p className="text-sm text-slate-400">
             Already have an account?{" "}
-            <Link to="/login" className="text-blue-300 hover:text-blue-200 font-semibold">
+            <Link
+              to="/login"
+              className="text-blue-300 hover:text-blue-200 font-semibold"
+            >
               Sign in
             </Link>
           </p>
