@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { User, Mail, Lock, Shield } from "lucide-react";
+import { User, Mail, Lock, Shield, ShieldCheck } from "lucide-react";
 
 import { useToast } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
@@ -80,7 +80,8 @@ export default function SignupPage() {
 
       setUserFromAuth(res.user);
 
-      push("success", "Account created successfully");
+      push("success", "Account created successfully 🎉");
+
       navigate("/app/dashboard", { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Signup failed";
@@ -91,17 +92,25 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen app-bg flex items-center justify-center px-6 py-12">
-      <Card className="w-full max-w-md p-10 backdrop-blur-xl bg-slate-900/80 border border-slate-800 shadow-2xl">
+    <div className="min-h-screen flex items-center justify-center px-6 py-12 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
 
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-white tracking-tight">
-            Create your account
+      <Card className="w-full max-w-md p-10 bg-slate-900/90 backdrop-blur-xl border border-slate-800 shadow-2xl">
+
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+
+          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600/20 text-blue-400 mb-3">
+            <ShieldCheck size={26} />
+          </div>
+
+          <h1 className="text-3xl font-bold text-white">
+            RBAC Manager
           </h1>
-          <p className="mt-2 text-sm text-slate-400">
-            Access the RBAC User Management platform
+
+          <p className="text-sm text-slate-400 mt-1">
+            Create your account
           </p>
+
         </div>
 
         <form onSubmit={onSubmit} className="space-y-5">
@@ -133,6 +142,7 @@ export default function SignupPage() {
             </label>
 
             <div className="relative">
+
               <Shield
                 size={16}
                 className="absolute left-3 top-3 text-slate-400"
@@ -146,6 +156,7 @@ export default function SignupPage() {
                 <option value="USER">User</option>
                 <option value="MANAGER">Manager</option>
               </select>
+
             </div>
           </div>
 
@@ -162,19 +173,26 @@ export default function SignupPage() {
           {/* Password Strength */}
           {form.password && (
             <div className="space-y-1">
+
               <div className="flex justify-between text-xs">
-                <span className="text-slate-500">Password strength</span>
+                <span className="text-slate-500">
+                  Password strength
+                </span>
+
                 <span className="text-slate-300 font-medium">
                   {strength.label}
                 </span>
               </div>
 
               <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+
                 <div
                   className={`h-full ${strength.color} transition-all`}
                   style={{ width: `${(score / 4) * 100}%` }}
                 />
+
               </div>
+
             </div>
           )}
 
@@ -204,9 +222,11 @@ export default function SignupPage() {
               Sign in
             </Link>
           </p>
+
         </form>
 
       </Card>
+
     </div>
   );
 }

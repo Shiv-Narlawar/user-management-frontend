@@ -7,7 +7,9 @@ export interface UserRow {
   email: string;
   roleName: Role;
   status: Status;
+
   departmentId?: string;
+
   department?: {
     id: string;
     name: string;
@@ -22,23 +24,22 @@ export interface UsersResponse {
 }
 
 export async function getUsers(params: {
-  search: string;
+  search?: string;
   page: number;
   limit: number;
 }): Promise<UsersResponse> {
-  const qs = new URLSearchParams({
-    search: params.search,
-    page: String(params.page),
-    limit: String(params.limit),
-  });
+  const qs = new URLSearchParams();
+
+  if (params.search) {
+    qs.append("search", params.search);
+  }
+
+  qs.append("page", String(params.page));
+  qs.append("limit", String(params.limit));
 
   return apiFetch<UsersResponse>(`/users?${qs.toString()}`);
 }
 
-/**
- * 🔹 Only USER role without department
- * Used for Assign User dropdown
- */
 export async function getAssignableUsers(): Promise<UserRow[]> {
   const res = await apiFetch<{ data: UserRow[] }>("/users/unassigned");
   return res.data;
@@ -50,10 +51,14 @@ export async function updateUserStatus(payload: {
 }): Promise<void> {
   await apiFetch<void>(`/users/${payload.id}`, {
     method: "PUT",
-    body: JSON.stringify({ status: payload.status }),
+    body: JSON.stringify({
+      status: payload.status,
+    }),
   });
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  await apiFetch<void>(`/users/${id}`, { method: "DELETE" });
+  await apiFetch<void>(`/users/${id}`, {
+    method: "DELETE",
+  });
 }

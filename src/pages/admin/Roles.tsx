@@ -179,7 +179,7 @@ export default function Roles() {
             <div className="text-4xl font-extrabold mt-2">Roles</div>
 
             <div className="text-slate-400 mt-2">
-              Create & manage roles. Permissions are assigned in{" "}
+              Create & manage roles
               <span className="text-slate-200 font-semibold">Permissions</span>.
             </div>
 
