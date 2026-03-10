@@ -7,12 +7,12 @@ export interface UserRow {
   email: string;
   roleName: Role;
   status: Status;
-  departmentId?: string
+  departmentId?: string;
   department?: {
-    id: string
-    name: string
-  }
-  }
+    id: string;
+    name: string;
+  };
+}
 
 export interface UsersResponse {
   data: UserRow[];
@@ -33,6 +33,15 @@ export async function getUsers(params: {
   });
 
   return apiFetch<UsersResponse>(`/users?${qs.toString()}`);
+}
+
+/**
+ * 🔹 Only USER role without department
+ * Used for Assign User dropdown
+ */
+export async function getAssignableUsers(): Promise<UserRow[]> {
+  const res = await apiFetch<{ data: UserRow[] }>("/users/unassigned");
+  return res.data;
 }
 
 export async function updateUserStatus(payload: {

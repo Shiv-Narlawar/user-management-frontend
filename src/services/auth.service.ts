@@ -1,13 +1,4 @@
-<<<<<<< HEAD
 import { apiFetch } from "../lib/api";
-import type { Role, UserRow } from "../types/rbac";
-
-export type AuthUser = UserRow & {
-  permissions?: string[];
-};
-=======
-
-import { apiFetch } from "../lib/apiFetch";
 
 export type Role = "ADMIN" | "MANAGER" | "USER";
 
@@ -19,78 +10,61 @@ export interface AuthUser {
   status?: string;
   permissions?: string[];
 }
->>>>>>> d16fa5a (Build React screens)
 
 export interface AuthResponse {
   token?: string;
   refreshToken?: string;
+  mustChangePassword?: boolean;
   user?: AuthUser;
   message?: string;
 }
 
-<<<<<<< HEAD
-export type LoginResponse = AuthResponse & { token: string; user: AuthUser };
-export type SignupResponse = AuthResponse & { token: string; user: AuthUser };
-
-=======
->>>>>>> d16fa5a (Build React screens)
-function setTokens(token: string, refreshToken?: string) {
+function setTokens(token: string, refreshToken?: string, user?: AuthUser) {
   localStorage.setItem("accessToken", token);
-  if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
+
+  if (refreshToken) {
+    localStorage.setItem("refreshToken", refreshToken);
+  }
+
+  if (user) {
+    localStorage.setItem("authUser", JSON.stringify(user));
+  }
 }
 
 export async function signup(payload: {
   name: string;
   email: string;
   password: string;
-<<<<<<< HEAD
-  role: Extract<Role, "USER" | "MANAGER">;
-}): Promise<SignupResponse> {
-=======
   role: "USER" | "MANAGER";
 }): Promise<AuthResponse> {
->>>>>>> d16fa5a (Build React screens)
   const result = (await apiFetch("/auth/signup", {
     method: "POST",
     body: JSON.stringify(payload),
   })) as AuthResponse;
 
-<<<<<<< HEAD
-  if (!result.token) throw new Error("Signup failed: token missing");
-  if (!result.user) throw new Error("Signup failed: user missing");
+  if (!result.token) {
+    throw new Error("Signup failed: token missing");
+  }
 
-  setTokens(result.token, result.refreshToken);
-  return result as SignupResponse;
-=======
-  
+  setTokens(result.token, result.refreshToken, result.user);
   return result;
->>>>>>> d16fa5a (Build React screens)
 }
 
 export async function login(payload: {
   email: string;
   password: string;
-<<<<<<< HEAD
-}): Promise<LoginResponse> {
-=======
 }): Promise<AuthResponse> {
->>>>>>> d16fa5a (Build React screens)
   const result = (await apiFetch("/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
   })) as AuthResponse;
 
-  if (!result.token) throw new Error("Login failed: token missing");
-<<<<<<< HEAD
-  if (!result.user) throw new Error("Login failed: user missing");
+  if (!result.token) {
+    throw new Error("Login failed: token missing");
+  }
 
-  setTokens(result.token, result.refreshToken);
-  return result as LoginResponse;
-=======
-
-  setTokens(result.token, result.refreshToken);
+  setTokens(result.token, result.refreshToken, result.user);
   return result;
->>>>>>> d16fa5a (Build React screens)
 }
 
 export async function logout(refreshToken: string | null): Promise<void> {
@@ -102,12 +76,12 @@ export async function logout(refreshToken: string | null): Promise<void> {
       });
     }
   } catch {
-<<<<<<< HEAD
-    // ignore logout errors;
-=======
-    // ignore logout errors; frontend already clears tokens in AuthContext
->>>>>>> d16fa5a (Build React screens)
+    // ignore logout errors
   }
+
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("authUser");
 }
 
 export async function refresh(refreshToken: string): Promise<AuthResponse> {
@@ -116,13 +90,17 @@ export async function refresh(refreshToken: string): Promise<AuthResponse> {
     body: JSON.stringify({ refreshToken }),
   })) as AuthResponse;
 
-  if (!result.token) throw new Error("Refresh failed: token missing");
+  if (!result.token) {
+    throw new Error("Refresh failed: token missing");
+  }
 
-  setTokens(result.token, result.refreshToken);
+  setTokens(result.token, result.refreshToken, result.user);
   return result;
 }
 
-export async function requestPasswordReset(email: string): Promise<AuthResponse> {
+export async function requestPasswordReset(
+  email: string
+): Promise<AuthResponse> {
   return (await apiFetch("/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify({ email }),
@@ -131,10 +109,6 @@ export async function requestPasswordReset(email: string): Promise<AuthResponse>
 
 export async function resetPassword(payload: {
   email: string;
-<<<<<<< HEAD
-=======
-  code: string;
->>>>>>> d16fa5a (Build React screens)
   newPassword: string;
 }): Promise<AuthResponse> {
   return (await apiFetch("/auth/reset-password", {
@@ -142,8 +116,6 @@ export async function resetPassword(payload: {
     body: JSON.stringify(payload),
   })) as AuthResponse;
 }
-<<<<<<< HEAD
-=======
 
 export async function forgotUsername(payload: {
   email: string;
@@ -153,4 +125,16 @@ export async function forgotUsername(payload: {
     body: JSON.stringify(payload),
   })) as AuthResponse;
 }
->>>>>>> d16fa5a (Build React screens)
+
+export function getCurrentUser(): AuthUser | null {
+  const token = localStorage.getItem("accessToken");
+  const user = localStorage.getItem("authUser");
+
+  if (!token || !user) return null;
+
+  try {
+    return JSON.parse(user);
+  } catch {
+    return null;
+  }
+}

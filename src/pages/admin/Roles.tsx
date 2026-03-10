@@ -4,10 +4,11 @@ import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../context/ToastContext";
 import { apiFetch } from "../../lib/api";
+import { useDebounce } from "../../hooks/useDebounce";
 
 interface RoleRow {
   id: string;
-  name: string; 
+  name: string;
 }
 
 type RolesResponse = { data: RoleRow[] } | RoleRow[];
@@ -21,11 +22,12 @@ function isDefaultRole(name: string) {
 
 function validateRoleName(name: string): string | null {
   const trimmed = name.trim();
+
   if (!trimmed) return "Role name is required";
-  if (trimmed.length > 32) return "Role name must be <= 32 characters";
+  if (trimmed.length > 32) return "Role name must be ≤ 32 characters";
 
   const ok = /^[A-Z][A-Z0-9_]*$/.test(trimmed);
-  if (!ok) return "Use uppercase format like SUPPORT_AGENT (A-Z, 0-9, _)";
+  if (!ok) return "Use uppercase format like SUPPORT_AGENT";
 
   return null;
 }
@@ -34,17 +36,20 @@ export default function Roles() {
   const { push } = useToast();
 
   const [roles, setRoles] = useState<RoleRow[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
 
-  const [name, setName] = useState<string>("");
-  const [creating, setCreating] = useState<boolean>(false);
+  const [name, setName] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const [q, setQ] = useState("");
+  const dq = useDebounce(q, 300);
+
   const [userCounts, setUserCounts] = useState<Map<string, number>>(new Map());
   const [loadingCounts, setLoadingCounts] = useState(false);
 
   async function load(): Promise<void> {
     setLoading(true);
+
     try {
       const res = (await apiFetch("/roles")) as RolesResponse;
       const list = Array.isArray(res) ? res : res.data ?? [];
@@ -59,6 +64,7 @@ export default function Roles() {
 
   async function loadRoleCounts(): Promise<void> {
     setLoadingCounts(true);
+
     try {
       const res = (await apiFetch("/roles/summary")) as RoleSummaryResponse;
       const list = Array.isArray(res) ? res : res.data ?? [];
@@ -76,16 +82,30 @@ export default function Roles() {
   useEffect(() => {
     void load();
     void loadRoleCounts();
-    
   }, []);
 
   const filtered = useMemo(() => {
-    const query = q.trim().toLowerCase();
+    const query = dq.trim().toLowerCase();
     if (!query) return roles;
+
     return roles.filter((r) => r.name.toLowerCase().includes(query));
-  }, [roles, q]);
+  }, [roles, dq]);
+
+  const sortedRoles = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const aDefault = isDefaultRole(a.name);
+      const bDefault = isDefaultRole(b.name);
+
+      if (aDefault && !bDefault) return -1;
+      if (!aDefault && bDefault) return 1;
+
+      return a.name.localeCompare(b.name);
+    });
+  }, [filtered]);
 
   const existingNames = useMemo(() => new Set(roles.map((r) => r.name)), [roles]);
+
+  const roleError = validateRoleName(name.toUpperCase());
 
   async function create(): Promise<void> {
     const trimmed = name.trim().toUpperCase();
@@ -102,6 +122,7 @@ export default function Roles() {
     }
 
     setCreating(true);
+
     try {
       await apiFetch("/roles", {
         method: "POST",
@@ -110,8 +131,8 @@ export default function Roles() {
 
       push("success", "Role created");
       setName("");
-      await load();
-      await loadRoleCounts();
+
+      await Promise.all([load(), loadRoleCounts()]);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Role create failed";
       push("error", msg);
@@ -122,8 +143,9 @@ export default function Roles() {
 
   async function remove(roleId: string, roleName: string): Promise<void> {
     const count = userCounts.get(roleId);
+
     if (typeof count === "number" && count > 0) {
-      push("error", "Cannot delete a role that has users assigned");
+      push("error", "Cannot delete a role with users assigned");
       return;
     }
 
@@ -132,9 +154,10 @@ export default function Roles() {
 
     try {
       await apiFetch(`/roles/${roleId}`, { method: "DELETE" });
+
       push("success", "Role deleted");
-      await load();
-      await loadRoleCounts();
+
+      await Promise.all([load(), loadRoleCounts()]);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Role delete failed";
       push("error", msg);
@@ -152,9 +175,11 @@ export default function Roles() {
             <div className="text-blue-300 text-sm font-semibold tracking-widest">
               ADMIN
             </div>
+
             <div className="text-4xl font-extrabold mt-2">Roles</div>
+
             <div className="text-slate-400 mt-2">
-              Create & manage roles
+              Create & manage roles. Permissions are assigned in{" "}
               <span className="text-slate-200 font-semibold">Permissions</span>.
             </div>
 
@@ -168,25 +193,42 @@ export default function Roles() {
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="New role name (e.g. SUPPORT_AGENT)"
-                className="w-80"
-              />
-              <Button onClick={create} disabled={creating}>
+              <div>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="New role name (SUPPORT_AGENT)"
+                  className="w-80"
+                />
+
+                {roleError && (
+                  <div className="text-xs text-red-400 mt-1">
+                    {roleError}
+                  </div>
+                )}
+              </div>
+
+              <Button
+                onClick={create}
+                disabled={creating || !!roleError}
+              >
                 {creating ? "Creating…" : "Create"}
               </Button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search roles..."
                 className="w-72"
               />
-              <Button variant="ghost" onClick={() => setQ("")} disabled={!q}>
+
+              <Button
+                variant="ghost"
+                onClick={() => setQ("")}
+                disabled={!q}
+              >
                 Reset
               </Button>
 
@@ -202,7 +244,6 @@ export default function Roles() {
           <span className="font-semibold text-slate-200">
             UPPERCASE_WITH_UNDERSCORES
           </span>
-          . Example: <span className="font-semibold text-slate-200">SUPPORT_AGENT</span>
         </div>
       </Card>
 
@@ -220,33 +261,35 @@ export default function Roles() {
           <tbody>
             {loading ? (
               <tr>
-                <td className="px-6 py-6 text-slate-400" colSpan={4}>
-                  Loading…
+                <td colSpan={4} className="px-6 py-6 text-slate-400">
+                  Loading roles…
                 </td>
               </tr>
-            ) : filtered.length === 0 ? (
+            ) : sortedRoles.length === 0 ? (
               <tr>
-                <td className="px-6 py-6 text-slate-400" colSpan={4}>
+                <td colSpan={4} className="px-6 py-6 text-slate-400">
                   No roles found.
                 </td>
               </tr>
             ) : (
-              filtered.map((r) => {
+              sortedRoles.map((r) => {
                 const defaultRole = isDefaultRole(r.name);
                 const count = userCounts.get(String(r.id));
-                const canDelete = !defaultRole && !(typeof count === "number" && count > 0);
+                const canDelete =
+                  !defaultRole &&
+                  !(typeof count === "number" && count > 0);
 
                 return (
                   <tr
                     key={r.id}
-                    className="border-b border-slate-800/70 hover:bg-slate-900/25"
+                    className="border-b border-slate-800 hover:bg-slate-900/25"
                   >
                     <td className="px-6 py-4 font-semibold">{r.name}</td>
 
                     <td className="px-6 py-4">
                       <span
                         className={[
-                          "inline-flex items-center rounded-2xl border px-3 py-1 text-xs font-semibold",
+                          "inline-flex rounded-2xl border px-3 py-1 text-xs font-semibold",
                           defaultRole
                             ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
                             : "border-slate-700 bg-slate-900/30 text-slate-200",
@@ -260,23 +303,14 @@ export default function Roles() {
                       {typeof count === "number" ? count : "—"}
                     </td>
 
-                    <td className="px-6 py-4">
-                      <div className="flex justify-end">
-                        <Button
-                          variant="danger"
-                          onClick={() => remove(String(r.id), r.name)}
-                          disabled={!canDelete}
-                          title={
-                            defaultRole
-                              ? "Default roles cannot be deleted"
-                              : typeof count === "number" && count > 0
-                              ? "Cannot delete role with users assigned"
-                              : "Delete role"
-                          }
-                        >
-                          Delete
-                        </Button>
-                      </div>
+                    <td className="px-6 py-4 text-right">
+                      <Button
+                        variant="danger"
+                        disabled={!canDelete}
+                        onClick={() => remove(String(r.id), r.name)}
+                      >
+                        Delete
+                      </Button>
                     </td>
                   </tr>
                 );

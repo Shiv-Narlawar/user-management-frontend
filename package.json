@@ -14,15 +14,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-query": "^5.90.21",
     "axios": "^1.13.5",
-<<<<<<< HEAD
-<<<<<<< HEAD
     "lucide-react": "^0.576.0",
-=======
-    "lucide-react": "^0.575.0",
->>>>>>> d16fa5a (Build React screens)
-=======
-    "lucide-react": "^0.576.0",
->>>>>>> 27e3f98 (Addressed all comments)
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1"

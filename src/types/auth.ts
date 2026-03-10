@@ -1,17 +1,16 @@
-export type Role = "ADMIN" | "MANAGER" | "USER";
-
 export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: Role;
+  role: string;
   status?: string;
   permissions?: string[];
 }
 
 export interface AuthResponse {
-  token: string;
+  token?: string;
   refreshToken?: string;
-  user: AuthUser;
+  mustChangePassword?: boolean;
+  user?: AuthUser;
   message?: string;
 }
