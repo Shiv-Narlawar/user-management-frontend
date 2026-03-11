@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-
+/* Enable dark mode preference */
 :root {
   color-scheme: dark;
 }
