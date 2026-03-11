@@ -4,19 +4,48 @@ import {
   useQueryClient,
   type QueryKey,
 } from "@tanstack/react-query";
-import type { Status } from "../../types/rbac";
+
+import type { Status, Role } from "../../types/rbac";
 import { qk } from "../../lib/queryKeys";
+
 import type { UsersResponse } from "../../services/users.api";
-import { deleteUser, getUsers, updateUserStatus } from "../../services/users.api";
+import {
+  deleteUser,
+  getUsers,
+  updateUserStatus,
+} from "../../services/users.api";
+
 
 export function useUsersQuery(params: {
-  search: string;
+  search?: string;
+  role?: Role;
+  status?: Status;
+  departmentId?: string;
   page: number;
   limit: number;
+  sort?: "ASC" | "DESC";  
 }) {
   return useQuery<UsersResponse>({
-    queryKey: qk.users(params),
-    queryFn: () => getUsers(params),
+    queryKey: [
+      "users",
+      params.search,
+      params.role,
+      params.status,
+      params.departmentId,
+      params.page,
+      params.sort, 
+    ],
+
+    queryFn: () =>
+      getUsers({
+        search: params.search ?? "",
+        role: params.role,
+        status: params.status,
+        departmentId: params.departmentId,
+        page: params.page,
+        limit: params.limit,
+        sort: params.sort, 
+      }),
 
     placeholderData: (prev) => prev,
   });
@@ -24,12 +53,18 @@ export function useUsersQuery(params: {
 
 type UsersSnapshot = Array<[QueryKey, UsersResponse | undefined]>;
 
+
+
 export function useUpdateUserStatusMutation() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: { id: string; status: Status }) =>
-      updateUserStatus(payload),
+    mutationFn: (payload: {
+      id: string;
+      status: Status;
+      departmentId?: string;
+      roleName?: Role;
+    }) => updateUserStatus(payload),
 
     onMutate: async (payload) => {
       await qc.cancelQueries({ queryKey: ["users"] });
@@ -44,7 +79,13 @@ export function useUpdateUserStatusMutation() {
         qc.setQueryData<UsersResponse>(key, {
           ...data,
           data: data.data.map((r) =>
-            r.id === payload.id ? { ...r, status: payload.status } : r
+            r.id === payload.id
+              ? {
+                  ...r,
+                  status: payload.status,
+                  roleName: payload.roleName ?? r.roleName,
+                }
+              : r
           ),
         });
       });
@@ -52,7 +93,6 @@ export function useUpdateUserStatusMutation() {
       return { snapshots };
     },
 
-    // rollback if API fails
     onError: (_err, _payload, ctx) => {
       ctx?.snapshots?.forEach(([key, data]) => {
         qc.setQueryData(key, data);
@@ -66,6 +106,8 @@ export function useUpdateUserStatusMutation() {
   });
 }
 
+
+// DELETE USER
 export function useDeleteUserMutation() {
   const qc = useQueryClient();
 

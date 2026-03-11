@@ -1,5 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { Building2, Plus, Users, Trash2, Pencil } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Building2,
+  Pencil,
+  Plus,
+  Trash2,
+  UserCog,
+  Users,
+} from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
@@ -10,22 +17,30 @@ import type { Role } from "../../types/rbac";
 interface Department {
   id: string;
   name: string;
-  managerId: string;
-  manager?: { id: string; name: string; email: string };
+  managerId?: string | null;
+  manager?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  users?: {
+    id: string;
+  }[];
 }
 
 interface UserRow {
   id: string;
   name: string;
   email: string;
-  roleName?: Role;
-  role?: Role;
+  roleName: Role;
+  departmentId?: string | null;
 }
 
 type ListResponse<T> = { data: T[] } | T[];
 
 function toList<T>(res: ListResponse<T>): T[] {
-  return Array.isArray(res) ? res : res.data ?? [];
+  if (Array.isArray(res)) return res;
+  return res?.data ?? [];
 }
 
 export default function Departments() {
@@ -37,34 +52,34 @@ export default function Departments() {
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [managers, setManagers] = useState<UserRow[]>([]);
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [assignDept, setAssignDept] = useState<Department | null>(null);
+  const [createOpen, setCreateOpen] = useState<boolean>(false);
   const [editDept, setEditDept] = useState<Department | null>(null);
+  const [assignDept, setAssignDept] = useState<Department | null>(null);
+  const [assignManagerDept, setAssignManagerDept] =
+    useState<Department | null>(null);
 
   const [name, setName] = useState("");
-  const [managerId, setManagerId] = useState("");
   const [editName, setEditName] = useState("");
 
   const [assignUserId, setAssignUserId] = useState("");
+  const [selectedManagerId, setSelectedManagerId] = useState("");
+
   const [searchUser, setSearchUser] = useState("");
+  const [searchManager, setSearchManager] = useState("");
 
-  async function load() {
-    setLoading(true);
-    setErr(null);
-
+  async function loadDepartments() {
     try {
+      setLoading(true);
+      setErr(null);
+
       const deptRes = await apiFetch<ListResponse<Department>>("/departments");
       setDepartments(toList(deptRes));
-
-      if (isAdmin || isManager) {
-        const userRes = await apiFetch<ListResponse<UserRow>>(
-          "/users?limit=200&page=1"
-        );
-        setUsers(toList(userRes));
-      }
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to load departments");
     } finally {
@@ -72,43 +87,69 @@ export default function Departments() {
     }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function createDepartment() {
-    if (!isAdmin) return;
-
-    if (!name.trim() || !managerId) {
-      setErr("Department name and manager are required");
-      return;
-    }
-
+  async function loadUnassignedUsers() {
     try {
-      await apiFetch("/departments", {
-        method: "POST",
-        body: JSON.stringify({
-          name: name.trim(),
-          managerId,
-        }),
-      });
-
-      setCreateOpen(false);
-      setName("");
-      setManagerId("");
-      await load();
+      const userRes = await apiFetch<ListResponse<UserRow>>("/users/unassigned");
+      setUsers(toList(userRes));
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to create department");
+      setErr(e instanceof Error ? e.message : "Failed to load users");
     }
   }
 
-  async function updateDepartment() {
-    if (!editDept || !editName.trim()) {
+  async function loadUnassignedManagers() {
+    try {
+      const managerRes = await apiFetch<ListResponse<UserRow>>(
+        "/users/unassigned-managers"
+      );
+      setManagers(toList(managerRes));
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to load managers");
+    }
+  }
+
+  useEffect(() => {
+    loadDepartments();
+  }, []);
+
+  async function createDepartment() {
+    if (!name.trim()) {
       setErr("Department name is required");
       return;
     }
 
     try {
+      setActionLoading(true);
+      setErr(null);
+
+      await apiFetch("/departments", {
+        method: "POST",
+        body: JSON.stringify({
+          name: name.trim(),
+        }),
+      });
+
+      setCreateOpen(false);
+      setName("");
+      await loadDepartments();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to create department");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function updateDepartment() {
+    if (!editDept) return;
+
+    if (!editName.trim()) {
+      setErr("Department name is required");
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setErr(null);
+
       await apiFetch(`/departments/${editDept.id}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -118,71 +159,131 @@ export default function Departments() {
 
       setEditDept(null);
       setEditName("");
-      await load();
+      await loadDepartments();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to update department");
+    } finally {
+      setActionLoading(false);
     }
   }
 
   async function deleteDepartment(id: string) {
-    if (!isAdmin) return;
-
     const ok = window.confirm("Delete this department?");
     if (!ok) return;
 
     try {
-      await apiFetch(`/departments/${id}`, { method: "DELETE" });
-      await load();
+      setActionLoading(true);
+      setErr(null);
+
+      await apiFetch(`/departments/${id}`, {
+        method: "DELETE",
+      });
+
+      await loadDepartments();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to delete department");
+    } finally {
+      setActionLoading(false);
     }
   }
 
+  async function openAssignUserModal(dept: Department) {
+    setAssignDept(dept);
+    setAssignUserId("");
+    setSearchUser("");
+    await loadUnassignedUsers();
+  }
+
+  async function openAssignManagerModal(dept: Department) {
+    setAssignManagerDept(dept);
+    setSelectedManagerId("");
+    setSearchManager("");
+    await loadUnassignedManagers();
+  }
+
   async function assignUser() {
-    if (!assignDept || !assignUserId) {
-      setErr("Please select a user");
-      return;
-    }
+    if (!assignDept || !assignUserId) return;
 
     try {
+      setActionLoading(true);
+      setErr(null);
+
       await apiFetch(`/departments/${assignDept.id}/assign-user`, {
         method: "POST",
-        body: JSON.stringify({ userId: assignUserId }),
+        body: JSON.stringify({
+          userId: assignUserId,
+        }),
       });
 
       setAssignDept(null);
       setAssignUserId("");
       setSearchUser("");
-      await load();
+      await loadDepartments();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to assign user");
+    } finally {
+      setActionLoading(false);
     }
   }
 
-  const managers = useMemo(
-    () => users.filter((u) => (u.roleName ?? u.role) === "MANAGER"),
-    [users]
-  );
+  async function assignManager() {
+    if (!assignManagerDept || !selectedManagerId) return;
+
+    try {
+      setActionLoading(true);
+      setErr(null);
+
+      await apiFetch(`/departments/${assignManagerDept.id}/assign-manager`, {
+        method: "POST",
+        body: JSON.stringify({
+          managerId: selectedManagerId,
+        }),
+      });
+
+      setAssignManagerDept(null);
+      setSelectedManagerId("");
+      setSearchManager("");
+      await loadDepartments();
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to assign manager");
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   const filteredUsers = useMemo(() => {
+    const q = searchUser.trim().toLowerCase();
+    if (!q) return users;
+
     return users.filter(
       (u) =>
-        u.name.toLowerCase().includes(searchUser.toLowerCase()) ||
-        u.email.toLowerCase().includes(searchUser.toLowerCase())
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q)
     );
   }, [users, searchUser]);
 
+  const filteredManagers = useMemo(() => {
+    const q = searchManager.trim().toLowerCase();
+    if (!q) return managers;
+
+    return managers.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q)
+    );
+  }, [managers, searchManager]);
+
   return (
     <div className="space-y-5">
-      {/* Header */}
       <Card className="p-6">
-        <div className="flex justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-3xl font-extrabold">
-              <Building2 className="text-blue-300" /> Departments
+              <Building2 className="text-blue-300" />
+              Departments
             </div>
-            <div className="text-sm text-slate-400 mt-1">
-              Manage departments and assign users
+            <div className="mt-1 text-sm text-slate-400">
+              Manage departments, assign managers, and assign users.
             </div>
           </div>
 
@@ -200,12 +301,12 @@ export default function Departments() {
         </div>
       )}
 
-      {/* Table */}
-      <Card className="p-0 overflow-hidden">
+      <Card className="overflow-hidden p-0">
         <table className="w-full text-sm">
-          <thead className="bg-slate-950/40 border-b border-slate-800">
+          <thead className="border-b border-slate-800 bg-slate-950/40">
             <tr className="text-slate-300">
               <th className="px-6 py-3 text-left">Department</th>
+              <th className="px-6 py-3 text-left">Users</th>
               <th className="px-6 py-3 text-left">Manager</th>
               <th className="px-6 py-3 text-right">Actions</th>
             </tr>
@@ -214,13 +315,13 @@ export default function Departments() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={3} className="px-6 py-6 text-slate-400">
+                <td colSpan={4} className="px-6 py-8 text-slate-400">
                   Loading...
                 </td>
               </tr>
             ) : departments.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-6 py-6 text-slate-400">
+                <td colSpan={4} className="px-6 py-8 text-slate-400">
                   No departments found
                 </td>
               </tr>
@@ -230,41 +331,72 @@ export default function Departments() {
                   key={d.id}
                   className="border-b border-slate-800 hover:bg-slate-900/25"
                 >
-                  <td className="px-6 py-4 font-semibold">{d.name}</td>
-                  <td className="px-6 py-4 text-slate-300">
-                    {d.manager?.name ?? "—"}
+                  <td className="px-6 py-4">
+                    <div className="font-semibold">{d.name}</div>
                   </td>
 
-                  <td className="px-6 py-4 flex justify-end gap-2">
-                    {(isAdmin || isManager) && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => setAssignDept(d)}
-                      >
-                        <Users size={16} /> Assign user
-                      </Button>
-                    )}
+                  <td className="px-6 py-4 text-slate-300">
+                    {d.users?.length ?? 0}
+                  </td>
 
-                    {isAdmin && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setEditDept(d);
-                          setEditName(d.name);
-                        }}
-                      >
-                        <Pencil size={16} /> Edit
-                      </Button>
+                  <td className="px-6 py-4 text-slate-300">
+                    {d.manager ? (
+                      <div className="flex items-center gap-2">
+                        <span>{d.manager.name}</span>
+                        <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">
+                          Manager
+                        </span>
+                      </div>
+                    ) : (
+                      "Not Assigned"
                     )}
+                  </td>
 
-                    {isAdmin && (
-                      <Button
-                        variant="danger"
-                        onClick={() => deleteDepartment(d.id)}
-                      >
-                        <Trash2 size={16} /> Delete
-                      </Button>
-                    )}
+                  <td className="px-6 py-4">
+                    <div className="flex justify-end gap-2">
+                      {isAdmin && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => openAssignManagerModal(d)}
+                          disabled={actionLoading}
+                        >
+                          <UserCog size={16} /> Assign Manager
+                        </Button>
+                      )}
+
+                      {(isAdmin || isManager) && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => openAssignUserModal(d)}
+                          disabled={actionLoading}
+                        >
+                          <Users size={16} /> Assign User
+                        </Button>
+                      )}
+
+                      {isAdmin && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              setEditDept(d);
+                              setEditName(d.name);
+                            }}
+                            disabled={actionLoading}
+                          >
+                            <Pencil size={16} /> Edit
+                          </Button>
+
+                          <Button
+                            variant="danger"
+                            onClick={() => deleteDepartment(d.id)}
+                            disabled={actionLoading}
+                          >
+                            <Trash2 size={16} /> Delete
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -273,7 +405,6 @@ export default function Departments() {
         </table>
       </Card>
 
-      {/* Create Modal */}
       {createOpen && (
         <Modal title="Create Department" onClose={() => setCreateOpen(false)}>
           <Input
@@ -282,29 +413,21 @@ export default function Departments() {
             onChange={(e) => setName(e.target.value)}
           />
 
-          <select
-            className="w-full mt-3 rounded-2xl border border-slate-800 bg-slate-900 px-3 py-2"
-            value={managerId}
-            onChange={(e) => setManagerId(e.target.value)}
-          >
-            <option value="">Select manager</option>
-            {managers.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.email})
-              </option>
-            ))}
-          </select>
-
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="ghost" onClick={() => setCreateOpen(false)}>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setCreateOpen(false)}
+              disabled={actionLoading}
+            >
               Cancel
             </Button>
-            <Button onClick={createDepartment}>Create</Button>
+            <Button onClick={createDepartment} disabled={actionLoading}>
+              {actionLoading ? "Creating..." : "Create"}
+            </Button>
           </div>
         </Modal>
       )}
 
-      {/* Edit Modal */}
       {editDept && (
         <Modal title="Edit Department" onClose={() => setEditDept(null)}>
           <Input
@@ -313,16 +436,21 @@ export default function Departments() {
             onChange={(e) => setEditName(e.target.value)}
           />
 
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="ghost" onClick={() => setEditDept(null)}>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setEditDept(null)}
+              disabled={actionLoading}
+            >
               Cancel
             </Button>
-            <Button onClick={updateDepartment}>Update</Button>
+            <Button onClick={updateDepartment} disabled={actionLoading}>
+              {actionLoading ? "Updating..." : "Update"}
+            </Button>
           </div>
         </Modal>
       )}
 
-      {/* Assign Modal */}
       {assignDept && (
         <Modal
           title={`Assign user to ${assignDept.name}`}
@@ -334,28 +462,95 @@ export default function Departments() {
             onChange={(e) => setSearchUser(e.target.value)}
           />
 
-          <div className="mt-3 max-h-60 overflow-y-auto space-y-2">
-            {filteredUsers.map((u) => (
-              <div
-                key={u.id}
-                onClick={() => setAssignUserId(u.id)}
-                className={`cursor-pointer rounded-xl border px-3 py-2 ${
-                  assignUserId === u.id
-                    ? "border-blue-500 bg-blue-500/20"
-                    : "border-slate-800 hover:bg-slate-900"
-                }`}
-              >
-                <div className="font-semibold">{u.name}</div>
-                <div className="text-xs text-slate-400">{u.email}</div>
+          <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+            {filteredUsers.length === 0 ? (
+              <div className="rounded-xl border border-slate-800 px-3 py-4 text-sm text-slate-400">
+                No unassigned users found
               </div>
-            ))}
+            ) : (
+              filteredUsers.map((u) => (
+                <div
+                  key={u.id}
+                  onClick={() => setAssignUserId(u.id)}
+                  className={`cursor-pointer rounded-xl border px-3 py-2 ${
+                    assignUserId === u.id
+                      ? "border-blue-500 bg-blue-500/20"
+                      : "border-slate-800 hover:bg-slate-900"
+                  }`}
+                >
+                  <div className="font-semibold">{u.name}</div>
+                  <div className="text-xs text-slate-400">{u.email}</div>
+                </div>
+              ))
+            )}
           </div>
 
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="ghost" onClick={() => setAssignDept(null)}>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setAssignDept(null)}
+              disabled={actionLoading}
+            >
               Cancel
             </Button>
-            <Button onClick={assignUser}>Assign</Button>
+            <Button
+              onClick={assignUser}
+              disabled={!assignUserId || actionLoading}
+            >
+              {actionLoading ? "Assigning..." : "Assign User"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {assignManagerDept && (
+        <Modal
+          title={`Assign manager to ${assignManagerDept.name}`}
+          onClose={() => setAssignManagerDept(null)}
+        >
+          <Input
+            placeholder="Search manager..."
+            value={searchManager}
+            onChange={(e) => setSearchManager(e.target.value)}
+          />
+
+          <div className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+            {filteredManagers.length === 0 ? (
+              <div className="rounded-xl border border-slate-800 px-3 py-4 text-sm text-slate-400">
+                No unassigned managers found
+              </div>
+            ) : (
+              filteredManagers.map((m) => (
+                <div
+                  key={m.id}
+                  onClick={() => setSelectedManagerId(m.id)}
+                  className={`cursor-pointer rounded-xl border px-3 py-2 ${
+                    selectedManagerId === m.id
+                      ? "border-blue-500 bg-blue-500/20"
+                      : "border-slate-800 hover:bg-slate-900"
+                  }`}
+                >
+                  <div className="font-semibold">{m.name}</div>
+                  <div className="text-xs text-slate-400">{m.email}</div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setAssignManagerDept(null)}
+              disabled={actionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={assignManager}
+              disabled={!selectedManagerId || actionLoading}
+            >
+              {actionLoading ? "Assigning..." : "Assign Manager"}
+            </Button>
           </div>
         </Modal>
       )}
@@ -369,20 +564,21 @@ function Modal({
   onClose,
 }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
   onClose: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
-      <div className="relative glass w-full max-w-lg rounded-3xl border border-slate-800 p-6">
+      <div className="relative w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-950 p-6 shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="text-xl font-bold">{title}</div>
 
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white text-sm"
+            className="text-sm text-slate-400 hover:text-white"
+            type="button"
           >
             ✕
           </button>

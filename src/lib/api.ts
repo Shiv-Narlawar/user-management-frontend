@@ -76,7 +76,6 @@ export async function apiFetch<T = unknown>(
     headers,
   });
 
-  // Try refresh once if 401
   if (response.status === 401 && !isAuthEndpoint(endpoint)) {
     const newAccess = await refreshAccessToken();
 

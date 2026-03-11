@@ -21,7 +21,6 @@ const LIMIT = 10;
 type DepartmentOption = {
   id: string;
   name: string;
-  managerId?: string | null;
 };
 
 export default function Users() {
@@ -35,36 +34,40 @@ export default function Users() {
   const allowUpdate = isAdmin || isManager;
   const allowDelete = isAdmin;
 
-  const [q, setQ] = useState<string>("");
+  const [q, setQ] = useState("");
   const dq = useDebounce(q, 400);
 
-  const [page, setPage] = useState<number>(1);
+  const [page, setPage] = useState(1);
+
+  const [sortOrder, setSortOrder] = useState<"ASC" | "DESC">("DESC");
+  const [roleFilter, setRoleFilter] = useState<Role | "ALL">("ALL");
 
   const usersQuery = useUsersQuery({
     search: dq ?? "",
     page,
     limit: LIMIT,
+    sort: sortOrder,
+    role: roleFilter === "ALL" ? undefined : roleFilter,
   });
 
   const departmentsQuery = useDepartmentsQuery();
 
-  const updateStatus = useUpdateUserStatusMutation();
+  const updateUser = useUpdateUserStatusMutation();
   const delUser = useDeleteUserMutation();
 
-  const data = usersQuery.data;
-
-  const rows = data?.data ?? [];
-  const total = data?.total ?? 0;
-  const totalPages: number = data?.totalPages ?? 1;
+  const rows = usersQuery.data?.data ?? [];
+  const total = usersQuery.data?.total ?? 0;
+  const totalPages = usersQuery.data?.totalPages ?? 1;
 
   const departments: DepartmentOption[] =
     departmentsQuery.data?.data ?? [];
 
-  const [editOpen, setEditOpen] = useState<boolean>(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
 
   const [editStatus, setEditStatus] = useState<Status>("ACTIVE");
-  const [editDepartmentId, setEditDepartmentId] = useState<string>("");
+  const [editDepartmentId, setEditDepartmentId] = useState("");
+  const [editRole, setEditRole] = useState<Role>("USER");
 
   const selectedDepartmentName =
     departments.find((d) => d.id === editDepartmentId)?.name ||
@@ -74,25 +77,28 @@ export default function Users() {
     setEditing(u);
     setEditStatus(u.status ?? "ACTIVE");
     setEditDepartmentId(u.departmentId ?? "");
+    setEditRole(u.roleName);
     setEditOpen(true);
   }
 
   function closeEdit() {
-    if (updateStatus.isPending) return;
+    if (updateUser.isPending) return;
 
     setEditOpen(false);
     setEditing(null);
     setEditDepartmentId("");
     setEditStatus("ACTIVE");
+    setEditRole("USER");
   }
 
-  const saveEdit = async (): Promise<void> => {
+  const saveEdit = async () => {
     if (!allowUpdate || !editing) return;
 
     const payload: {
       id: string;
       status: Status;
       departmentId?: string;
+      roleName?: Role;
     } = {
       id: editing.id,
       status: editStatus,
@@ -100,14 +106,15 @@ export default function Users() {
 
     if (isAdmin) {
       payload.departmentId = editDepartmentId || undefined;
+      payload.roleName = editRole;
     }
 
-    await updateStatus.mutateAsync(payload);
+    await updateUser.mutateAsync(payload);
 
     closeEdit();
   };
 
-  const onDelete = async (id: string): Promise<void> => {
+  const onDelete = async (id: string) => {
     if (!allowDelete) return;
 
     const ok = window.confirm("Soft delete this user?");
@@ -131,9 +138,7 @@ export default function Users() {
   );
 
   const title =
-    role === "USER"
-      ? "My Department Directory"
-      : "Users";
+    role === "USER" ? "Department Directory" : "Users";
 
   const subtitle =
     role === "USER"
@@ -144,11 +149,8 @@ export default function Users() {
     (usersQuery.isError
       ? (usersQuery.error as Error | null)?.message
       : null) ||
-    (departmentsQuery.isError
-      ? (departmentsQuery.error as Error | null)?.message
-      : null) ||
-    (updateStatus.isError
-      ? (updateStatus.error as Error | null)?.message
+    (updateUser.isError
+      ? (updateUser.error as Error | null)?.message
       : null) ||
     (delUser.isError
       ? (delUser.error as Error | null)?.message
@@ -157,8 +159,11 @@ export default function Users() {
 
   return (
     <div className="space-y-5">
+
+      {/* HEADER */}
       <Card className="p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
+
           <div>
             <div className="text-3xl font-extrabold text-slate-100">
               {title}
@@ -169,15 +174,47 @@ export default function Users() {
             </div>
           </div>
 
-          <Input
-            value={q}
-            onChange={(e) => {
-              setQ(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search name or email..."
-            className="w-full md:w-72"
-          />
+          <div className="flex gap-3 w-full md:w-auto">
+
+            <Input
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search name or email..."
+              className="w-full md:w-72"
+            />
+
+            {isAdmin && (
+              <>
+                <select
+                  value={roleFilter}
+                  onChange={(e) => {
+                    setRoleFilter(e.target.value as Role | "ALL");
+                    setPage(1);
+                  }}
+                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                >
+                  <option value="ALL">All Roles</option>
+                  <option value="USER">Users</option>
+                  <option value="MANAGER">Managers</option>
+                </select>
+
+                <select
+                  value={sortOrder}
+                  onChange={(e) => {
+                    setSortOrder(e.target.value as "ASC" | "DESC");
+                    setPage(1);
+                  }}
+                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                >
+                  <option value="DESC">Newest First</option>
+                  <option value="ASC">Oldest First</option>
+                </select>
+              </>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -187,37 +224,32 @@ export default function Users() {
         </div>
       )}
 
+      {/* TABLE */}
       <Card className="overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
+
             <thead className="border-b border-slate-800 bg-slate-950/40">
               <tr className="text-slate-300">
                 <th className="px-6 py-3 text-left">Name</th>
                 <th className="px-6 py-3 text-left">Email</th>
                 <th className="px-6 py-3 text-left">Role</th>
                 <th className="px-6 py-3 text-left">Status</th>
-                <th className="px-6 py-3 text-right">
-                  Actions
-                </th>
+                <th className="px-6 py-3 text-left">Department</th>
+                <th className="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {usersQuery.isLoading ? (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-8 text-center text-slate-400"
-                  >
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
                     Loading users...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-8 text-center text-slate-400"
-                  >
+                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
                     No users found.
                   </td>
                 </tr>
@@ -251,7 +283,12 @@ export default function Users() {
                       </span>
                     </td>
 
+                    <td className="px-6 py-4 text-slate-300">
+                      {u.department?.name ?? "Unassigned"}
+                    </td>
+
                     <td className="space-x-2 px-6 py-4 text-right">
+
                       <Button
                         variant="ghost"
                         disabled={!allowUpdate}
@@ -263,146 +300,30 @@ export default function Users() {
                       {allowDelete && (
                         <Button
                           variant="danger"
-                          disabled={
-                            u.id === user?.id ||
-                            delUser.isPending
-                          }
-                          onClick={() =>
-                            void onDelete(u.id)
-                          }
+                          disabled={u.id === user?.id}
+                          onClick={() => onDelete(u.id)}
                         >
-                          {delUser.isPending
-                            ? "Deleting..."
-                            : "Delete"}
+                          Delete
                         </Button>
                       )}
+
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
+
           </table>
         </div>
       </Card>
 
-      {/* EDIT MODAL */}
-
-      {editOpen && editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <Card className="w-full max-w-md p-6">
-            <div className="text-lg font-bold mb-4">
-              Edit User
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <div className="text-sm text-slate-400">
-                  Name
-                </div>
-                <div className="text-slate-100">
-                  {editing.name}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-sm text-slate-400">
-                  Email
-                </div>
-                <div className="text-slate-100">
-                  {editing.email}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-sm text-slate-400 mb-1">
-                  Status
-                </div>
-
-                <select
-                  value={editStatus}
-                  onChange={(e) =>
-                    setEditStatus(
-                      e.target.value as Status
-                    )
-                  }
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                >
-                  <option value="ACTIVE">
-                    ACTIVE
-                  </option>
-                  <option value="INACTIVE">
-                    INACTIVE
-                  </option>
-                </select>
-              </div>
-
-              {isAdmin && (
-                <div>
-                  <div className="text-sm text-slate-400 mb-1">
-                    Department
-                  </div>
-
-                  <select
-                    value={editDepartmentId}
-                    onChange={(e) =>
-                      setEditDepartmentId(
-                        e.target.value
-                      )
-                    }
-                    className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                  >
-                    <option value="">
-                      Unassigned
-                    </option>
-
-                    {departments.map((d) => (
-                      <option
-                        key={d.id}
-                        value={d.id}
-                      >
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <div className="text-xs text-slate-400 mt-1">
-                    Selected:{" "}
-                    {selectedDepartmentName}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <Button
-                variant="ghost"
-                onClick={closeEdit}
-              >
-                Cancel
-              </Button>
-
-              <Button
-                onClick={saveEdit}
-                disabled={updateStatus.isPending}
-              >
-                {updateStatus.isPending
-                  ? "Saving..."
-                  : "Save"}
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
-
       {/* PAGINATION */}
-
       {totalPages > 1 && (
         <div className="flex justify-center gap-3">
+
           <Button
             disabled={page === 1}
-            onClick={() =>
-              setPage((p) => p - 1)
-            }
+            onClick={() => setPage((p) => p - 1)}
           >
             Previous
           </Button>
@@ -413,12 +334,116 @@ export default function Users() {
 
           <Button
             disabled={page === totalPages}
-            onClick={() =>
-              setPage((p) => p + 1)
-            }
+            onClick={() => setPage((p) => p + 1)}
           >
             Next
           </Button>
+
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {editOpen && editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+
+          <Card className="w-full max-w-md p-6">
+
+            <div className="text-lg font-bold mb-4">
+              Edit User
+            </div>
+
+            <div className="space-y-4">
+
+              <div>
+                <div className="text-sm text-slate-400">Name</div>
+                <div className="text-slate-100">{editing.name}</div>
+              </div>
+
+              <div>
+                <div className="text-sm text-slate-400">Email</div>
+                <div className="text-slate-100">{editing.email}</div>
+              </div>
+
+              <div>
+                <div className="text-sm text-slate-400 mb-1">Status</div>
+
+                <select
+                  value={editStatus}
+                  onChange={(e) =>
+                    setEditStatus(e.target.value as Status)
+                  }
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                </select>
+              </div>
+
+              {isAdmin && (
+                <>
+                  <div>
+                    <div className="text-sm text-slate-400 mb-1">
+                      Role
+                    </div>
+
+                    <select
+                      value={editRole}
+                      onChange={(e) =>
+                        setEditRole(e.target.value as Role)
+                      }
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                    >
+                      <option value="USER">USER</option>
+                      <option value="MANAGER">MANAGER</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-400 mb-1">
+                      Department
+                    </div>
+
+                    <select
+                      value={editDepartmentId}
+                      onChange={(e) =>
+                        setEditDepartmentId(e.target.value)
+                      }
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                    >
+                      <option value="">Unassigned</option>
+
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="text-xs text-slate-400 mt-1">
+                      Selected: {selectedDepartmentName}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+
+              <Button variant="ghost" onClick={closeEdit}>
+                Cancel
+              </Button>
+
+              <Button
+                onClick={saveEdit}
+                disabled={updateUser.isPending}
+              >
+                {updateUser.isPending ? "Saving..." : "Save"}
+              </Button>
+
+            </div>
+
+          </Card>
+
         </div>
       )}
     </div>
