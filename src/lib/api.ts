@@ -21,7 +21,9 @@ async function refreshAccessToken(): Promise<string | null> {
 
   const res = await fetch(`${BASE_URL}/auth/refresh`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({ refreshToken }),
   });
 
@@ -32,6 +34,7 @@ async function refreshAccessToken(): Promise<string | null> {
   if (!data.token) return null;
 
   localStorage.setItem("accessToken", data.token);
+
   if (data.refreshToken) {
     localStorage.setItem("refreshToken", data.refreshToken);
   }
@@ -73,7 +76,6 @@ export async function apiFetch<T = unknown>(
     headers,
   });
 
-  // Try refresh once if 401 and not auth endpoint
   if (response.status === 401 && !isAuthEndpoint(endpoint)) {
     const newAccess = await refreshAccessToken();
 
@@ -95,15 +97,12 @@ export async function apiFetch<T = unknown>(
   const isJson = contentType.includes("application/json");
 
   if (!response.ok) {
-    const errorBody = isJson
-      ? await response.json()
-      : await response.text();
+    const errorBody = isJson ? await response.json() : await response.text();
 
     const message =
       typeof errorBody === "string"
         ? errorBody
-        : (errorBody as { message?: string })?.message ||
-          response.statusText;
+        : (errorBody as { message?: string })?.message || response.statusText;
 
     throw new Error(message);
   }
@@ -114,3 +113,36 @@ export async function apiFetch<T = unknown>(
 
   return (isJson ? await response.json() : await response.text()) as T;
 }
+
+const api = {
+  get: async <T>(endpoint: string) => ({
+    data: await apiFetch<T>(endpoint, { method: "GET" }),
+  }),
+
+  post: async <T, B = unknown>(endpoint: string, body?: B) => ({
+    data: await apiFetch<T>(endpoint, {
+      method: "POST",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    }),
+  }),
+
+  put: async <T, B = unknown>(endpoint: string, body?: B) => ({
+    data: await apiFetch<T>(endpoint, {
+      method: "PUT",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    }),
+  }),
+
+  patch: async <T, B = unknown>(endpoint: string, body?: B) => ({
+    data: await apiFetch<T>(endpoint, {
+      method: "PATCH",
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    }),
+  }),
+
+  delete: async <T>(endpoint: string) => ({
+    data: await apiFetch<T>(endpoint, { method: "DELETE" }),
+  }),
+};
+
+export default api;

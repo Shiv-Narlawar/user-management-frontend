@@ -1,4 +1,4 @@
-import { apiFetch } from "../lib/apiFetch";
+import { apiFetch } from "../lib/api";
 import type { RoleNode } from "../types/rbac";
 
 export async function fetchRoles(): Promise<RoleNode[]> {

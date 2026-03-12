@@ -1,31 +1,38 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-  useEffect,
-} from "react";
+import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
 import type { AuthUser } from "../services/auth.service";
-import {
-  logout as logoutApi,
-  getCurrentUser,
-} from "../services/auth.service";
+import { logout as logoutApi, getCurrentUser } from "../services/auth.service";
 
 type AuthContextType = {
   user: AuthUser | null;
   loading: boolean;
+
   setUserFromAuth: (user: AuthUser | null) => void;
   signOut: () => Promise<void>;
   clearSession: () => Promise<void>;
+
+  refreshUser: () => Promise<void>;
+  patchUserLocal: (partial: Partial<AuthUser>) => void;
 };
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ BOOTSTRAP ON APP LOAD
+  const refreshUser = async () => {
+    const token = localStorage.getItem("accessToken");
+
+    if (!token) {
+      setUser(null);
+      return;
+    }
+
+    const current = getCurrentUser();
+    setUser(current);
+  };
+
   useEffect(() => {
     async function bootstrap() {
       const token = localStorage.getItem("accessToken");
@@ -36,31 +43,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const res = await getCurrentUser(); // calls /auth/me
-        setUser(res.user);
+        await refreshUser();
       } catch {
-        // token invalid → clear session
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
+        localStorage.removeItem("authUser");
         setUser(null);
       } finally {
         setLoading(false);
       }
     }
 
-    bootstrap();
+    void bootstrap();
   }, []);
 
   const setUserFromAuth = (next: AuthUser | null) => {
     setUser(next);
   };
 
+  // Update user locally without refetch
+  const patchUserLocal = (partial: Partial<AuthUser>) => {
+    setUser((prev) => (prev ? { ...prev, ...partial } : prev));
+  };
+
   const signOut = async () => {
+
     const refreshToken = localStorage.getItem("refreshToken");
 
-    // Clear immediately (fast UX)
+    // Clear immediately
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
+    localStorage.removeItem("authUser");
+
     setUser(null);
 
     try {
@@ -68,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await logoutApi(refreshToken);
       }
     } catch {
-      // ignore backend revoke errors
+      // ignore errors
     } finally {
       window.location.href = "/login";
     }
@@ -85,6 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUserFromAuth,
       signOut,
       clearSession,
+      refreshUser,
+      patchUserLocal,
     }),
     [user, loading]
   );
@@ -104,6 +120,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+
+  if (!ctx) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+
   return ctx;
 }

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { User, Mail, Lock, Shield, ShieldCheck } from "lucide-react";
 
 import { useToast } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
@@ -28,16 +29,16 @@ function passwordScore(p: string): number {
   return s;
 }
 
-function passwordLabel(score: number): { label: string; cls: string } {
-  if (score <= 1) return { label: "Weak", cls: "text-rose-300" };
-  if (score === 2) return { label: "Okay", cls: "text-amber-300" };
-  if (score === 3) return { label: "Good", cls: "text-sky-300" };
-  return { label: "Strong", cls: "text-emerald-300" };
+function passwordLabel(score: number) {
+  if (score <= 1) return { label: "Weak", color: "bg-rose-500" };
+  if (score === 2) return { label: "Okay", color: "bg-amber-500" };
+  if (score === 3) return { label: "Good", color: "bg-sky-500" };
+  return { label: "Strong", color: "bg-emerald-500" };
 }
 
 export default function SignupPage() {
   const navigate = useNavigate();
-  const { push } = useToast(); // ✅ ToastContext uses push()
+  const { push } = useToast();
   const { setUserFromAuth } = useAuth();
 
   const [form, setForm] = useState<SignupForm>({
@@ -47,14 +48,14 @@ export default function SignupPage() {
     password: "",
   });
 
-  const [loading, setLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
 
   const score = useMemo(() => passwordScore(form.password), [form.password]);
   const strength = useMemo(() => passwordLabel(score), [score]);
 
   const onChange =
     <K extends keyof SignupForm>(key: K) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>): void => {
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       setForm((prev) => ({
         ...prev,
         [key]: e.target.value as SignupForm[K],
@@ -73,12 +74,14 @@ export default function SignupPage() {
         role: form.role,
       });
 
-      // ✅ res.user is optional in AuthResponse, so guard it
-      if (!res.user) throw new Error("Signup failed: user missing");
+      if (!res.token || !res.user) {
+        throw new Error("Signup failed");
+      }
 
       setUserFromAuth(res.user);
 
-      push("success", "Account created");
+      push("success", "Account created successfully 🎉");
+
       navigate("/app/dashboard", { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Signup failed";
@@ -89,84 +92,141 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen app-bg flex items-center justify-center px-4 py-10">
-      <Card className="w-full max-w-md">
-        <div className="mb-5">
-          <h1 className="text-2xl font-bold text-slate-100">Create Account</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Admin is seeded. Choose User/Manager and continue.
+    <div className="min-h-screen flex items-center justify-center px-6 py-12 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+
+      <Card className="w-full max-w-md p-10 bg-slate-900/90 backdrop-blur-xl border border-slate-800 shadow-2xl">
+
+        {/* Logo */}
+        <div className="flex flex-col items-center mb-8">
+
+          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600/20 text-blue-400 mb-3">
+            <ShieldCheck size={26} />
+          </div>
+
+          <h1 className="text-3xl font-bold text-white">
+            RBAC Manager
+          </h1>
+
+          <p className="text-sm text-slate-400 mt-1">
+            Create your account
           </p>
+
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-5">
+
+          {/* Name */}
           <Input
             label="Full Name"
             type="text"
-            name="name"
             value={form.name}
             onChange={onChange("name")}
-            placeholder="Your name"
-            autoComplete="name"
+            icon={<User size={18} />}
             required
           />
 
+          {/* Email */}
           <Input
             label="Email"
             type="email"
-            name="email"
             value={form.email}
             onChange={onChange("email")}
-            placeholder="you@example.com"
-            autoComplete="email"
+            icon={<Mail size={18} />}
             required
           />
 
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300">Role</label>
-            <select
-              name="role"
-              value={form.role}
-              onChange={onChange("role")}
-              className="w-full rounded-2xl bg-slate-900/70 border border-slate-800 px-4 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/35"
-            >
-              <option value="USER">User</option>
-              <option value="MANAGER">Manager</option>
-            </select>
+          {/* Role */}
+          <div>
+            <label className="text-sm text-slate-300 mb-1 block">
+              Role
+            </label>
+
+            <div className="relative">
+
+              <Shield
+                size={16}
+                className="absolute left-3 top-3 text-slate-400"
+              />
+
+              <select
+                value={form.role}
+                onChange={onChange("role")}
+                className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-800 bg-slate-900 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="USER">User</option>
+                <option value="MANAGER">Manager</option>
+              </select>
+
+            </div>
           </div>
 
+          {/* Password */}
           <Input
             label="Password"
             type="password"
-            name="password"
             value={form.password}
             onChange={onChange("password")}
-            placeholder="Create a strong password"
-            autoComplete="new-password"
+            icon={<Lock size={18} />}
             required
           />
 
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-500">Password strength</span>
-            <span className={`${strength.cls} font-semibold`}>
-              {strength.label} ({score}/4)
-            </span>
-          </div>
+          {/* Password Strength */}
+          {form.password && (
+            <div className="space-y-1">
 
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Creating..." : "Create Account"}
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500">
+                  Password strength
+                </span>
+
+                <span className="text-slate-300 font-medium">
+                  {strength.label}
+                </span>
+              </div>
+
+              <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+
+                <div
+                  className={`h-full ${strength.color} transition-all`}
+                  style={{ width: `${(score / 4) * 100}%` }}
+                />
+
+              </div>
+
+            </div>
+          )}
+
+          {/* Button */}
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2"
+          >
+            {loading ? "Creating account..." : "Create Account"}
           </Button>
 
-          <p className="text-sm text-slate-400">
+          {/* Divider */}
+          <div className="flex items-center gap-3 text-xs text-slate-500 pt-2">
+            <div className="flex-1 h-px bg-slate-800" />
+            OR
+            <div className="flex-1 h-px bg-slate-800" />
+          </div>
+
+          {/* Login Link */}
+          <p className="text-sm text-slate-400 text-center">
             Already have an account?{" "}
             <Link
               to="/login"
-              className="text-blue-300 hover:text-blue-200 font-semibold"
+              className="text-blue-400 font-semibold hover:text-blue-300"
             >
               Sign in
             </Link>
           </p>
+
         </form>
+
       </Card>
+
     </div>
   );
 }

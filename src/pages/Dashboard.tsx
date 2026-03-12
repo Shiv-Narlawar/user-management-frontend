@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "../components/ui/Card";
 import { useAuth } from "../context/AuthContext";
-import { BarChart3, Users, Clock4 } from "lucide-react";
+import { Users, ShieldCheck, Shield, UserCheck, UserX } from "lucide-react";
 import { fetchDashboardStats } from "../services/dashboard.service";
 
 interface DashboardStats {
@@ -25,7 +25,7 @@ function Stat({
   hint?: string;
 }) {
   return (
-    <Card className="p-5">
+    <Card className="p-6 hover:scale-[1.01] transition-transform duration-200">
       <div className="flex items-start justify-between">
         <div>
           <div className="text-sm text-slate-400">{label}</div>
@@ -48,72 +48,117 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     async function loadStats() {
       try {
         const data = await fetchDashboardStats();
+        if (!mounted) return;
         setStats(data);
       } catch (error) {
         console.error("Failed to load dashboard stats", error);
+        if (!mounted) return;
+        setStats(null);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     }
 
-    loadStats();
+    void loadStats();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const heading =
-    role === "ADMIN"
-      ? "Admin Portal"
-      : role === "MANAGER"
-      ? "Manager Portal"
-      : "RBAC Viewer Mode";
+    role === "ADMIN" ? "Admin Portal" : role === "MANAGER" ? "Manager Portal" : "User Portal";
 
   const sub =
-    role === "ADMIN"
-      ? "Overview"
-      : role === "MANAGER"
-      ? "Team Overview"
-      : "Colleague Directory";
+    role === "ADMIN" ? "System Overview" : role === "MANAGER" ? "Department Overview" : "Your Workspace";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      {/* Header */}
       <div className="glass rounded-3xl p-6">
         <div className="text-blue-300 text-sm font-semibold tracking-widest">
           {heading.toUpperCase()}
         </div>
         <div className="text-4xl font-extrabold mt-2">{sub}</div>
         <div className="text-slate-400 mt-2 max-w-2xl">
-          Role-based access: Admin (full), Manager (view+update), User (view only).
-          Dashboard reflects real database data.
+          Dashboard reflects live database metrics.
         </div>
       </div>
 
-      {loading && <div className="text-slate-400">Loading dashboard...</div>}
+      {/* Loading Skeleton */}
+      {loading && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="p-6 animate-pulse">
+              <div className="h-6 w-32 bg-slate-800 rounded mb-4"></div>
+              <div className="h-10 w-20 bg-slate-800 rounded"></div>
+            </Card>
+          ))}
+        </div>
+      )}
 
+      {/* Stats */}
       {!loading && stats && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {/* Everyone */}
           <Stat
             label="Total Users"
             value={stats.totalUsers}
             icon={<Users size={20} />}
-            hint="All registered users"
+            hint=""
           />
 
           <Stat
             label="Active Users"
             value={stats.activeUsers}
-            icon={<Clock4 size={20} />}
-            hint="Currently active accounts"
+            icon={<UserCheck size={20} />}
+            hint=""
           />
 
           <Stat
-            label="Managers"
-            value={stats.managers}
-            icon={<BarChart3 size={20} />}
-            hint="Users with manager role"
+            label="Inactive Users"
+            value={stats.inactiveUsers}
+            icon={<UserX size={20} />}
+            hint=""
           />
+
+          {/* Manager + Admin */}
+          {(role === "ADMIN") && (
+            <Stat
+              label="Users (Role)"
+              value={stats.users}
+              icon={<Users size={20} />}
+              hint=""
+            />
+          )}
+
+          {/* Admin only */}
+          {role === "ADMIN" && (
+            <Stat
+              label="Managers"
+              value={stats.managers}
+              icon={<ShieldCheck size={20} />}
+              hint=""
+            />
+          )}
+
+          {role === "ADMIN" && (
+            <Stat
+              label="Admins"
+              value={stats.admins}
+              icon={<Shield size={20} />}
+              hint=""
+            />
+          )}
         </div>
+      )}
+
+      {!loading && !stats && (
+        <Card className="p-6 text-slate-400">No dashboard data available.</Card>
       )}
     </div>
   );

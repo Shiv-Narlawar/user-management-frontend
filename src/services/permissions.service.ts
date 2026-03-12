@@ -1,4 +1,4 @@
-import { apiFetch } from "../lib/apiFetch";
+import { apiFetch } from "../lib/api";
 
 export interface Permission {
   id: string;

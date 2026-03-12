@@ -21,7 +21,7 @@ function useQuery(): URLSearchParams {
 
 export default function ResetPassword() {
   const navigate = useNavigate();
-  const { push } = useToast(); // ✅ Correct toast usage
+  const { push } = useToast(); 
   const query = useQuery();
 
   const [email, setEmail] = useState<string>(query.get("email") ?? "");
