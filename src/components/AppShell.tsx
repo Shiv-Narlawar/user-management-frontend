@@ -83,8 +83,17 @@ function BottomIcon({
 }
 
 export function AppShell() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading } = useAuth();
   const isDesktop = useMedia("(min-width: 1024px)");
+
+  /** Prevent redirect flicker while session loads */
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-slate-400">
+        Loading session...
+      </div>
+    );
+  }
 
   const role = user?.role ?? "USER";
 
@@ -105,7 +114,7 @@ export function AppShell() {
     },
   ];
 
-  // Manager navigation
+  /** Manager navigation */
   if (role === "MANAGER") {
     nav.push({
       to: "/app/my-department",
@@ -114,7 +123,7 @@ export function AppShell() {
     });
   }
 
-  // Admin navigation
+  /** Admin navigation */
   if (role === "ADMIN") {
     nav.push({
       to: "/app/departments",

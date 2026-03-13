@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { RequireAuth, RequireRole } from "./routes/guards";
 import { AppShell } from "./components/AppShell";
 
+import { useAuth } from "./context/AuthContext";
+
 import Landing from "./pages/auth/Landing";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
@@ -21,11 +23,37 @@ import Departments from "./pages/admin/Departments";
 import MyDepartment from "./pages/manager/MyDepartment";
 
 export default function App() {
+
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-slate-400">
+        Loading session...
+      </div>
+    );
+  }
+
   return (
     <Routes>
 
       {/* ---------- PUBLIC ROUTES ---------- */}
-      <Route path="/" element={<Landing />} />
+
+      <Route
+  path="/"
+  element={
+    user ? (
+      user.role === "ADMIN"
+        ? <Navigate to="/app/dashboard" replace />
+        : user.role === "MANAGER"
+        ? <Navigate to="/app/my-department" replace />
+        : <Navigate to="/app/users" replace />
+    ) : (
+      <Landing />
+    )
+  }
+/>
+
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -33,7 +61,9 @@ export default function App() {
       <Route path="/update-password" element={<UpdatePassword />} />
 
       {/* ---------- PROTECTED ROUTES ---------- */}
+
       <Route element={<RequireAuth />}>
+
         <Route path="/app" element={<AppShell />}>
 
           {/* redirect /app -> dashboard */}
@@ -61,6 +91,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="dashboard" replace />} />
 
         </Route>
+
       </Route>
 
       {/* ---------- GLOBAL FALLBACK ---------- */}

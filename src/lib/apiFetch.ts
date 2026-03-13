@@ -1,6 +1,9 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:7000/api";
+import { getAuth0Token } from "./auth0Token";
 
-function getAccessToken(): string | null {
+export const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:7000/api";
+
+function getLocalToken(): string | null {
   return localStorage.getItem("accessToken");
 }
 
@@ -23,6 +26,7 @@ async function refreshAccessToken(): Promise<string | null> {
   if (!data.token) return null;
 
   localStorage.setItem("accessToken", data.token);
+
   if (data.refreshToken) {
     localStorage.setItem("refreshToken", data.refreshToken);
   }
@@ -42,11 +46,21 @@ function isAuthEndpoint(endpoint: string): boolean {
   );
 }
 
-export async function apiFetch(
+export async function apiFetch<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
-): Promise<unknown> {
-  const accessToken = getAccessToken();
+): Promise<T> {
+
+  let accessToken: string | null = null;
+
+  const auth0Token = await getAuth0Token();
+
+  if (auth0Token) {
+    accessToken = auth0Token;
+  } else {
+
+    accessToken = getLocalToken();
+  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -65,15 +79,16 @@ export async function apiFetch(
     headers,
   });
 
-  
-  if (response.status === 401 && !isAuthEndpoint(endpoint)) {
+  const usingLocalJWT = !!getLocalToken();
+
+  if (response.status === 401 && usingLocalJWT && !isAuthEndpoint(endpoint)) {
+
     const newAccess = await refreshAccessToken();
 
     if (!newAccess) {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
+      localStorage.clear();
       window.location.href = "/login";
-      throw new Error("Session expired. Please login again.");
+      throw new Error("Session expired");
     }
 
     headers.Authorization = `Bearer ${newAccess}`;
@@ -95,12 +110,14 @@ export async function apiFetch(
     const message =
       typeof errorBody === "string"
         ? errorBody
-        : errorBody?.message || response.statusText;
+        : (errorBody as { message?: string })?.message || response.statusText;
 
     throw new Error(message);
   }
 
-  if (response.status === 204) return null;
+  if (response.status === 204) {
+    return null as T;
+  }
 
-  return isJson ? response.json() : response.text();
+  return (isJson ? await response.json() : await response.text()) as T;
 }

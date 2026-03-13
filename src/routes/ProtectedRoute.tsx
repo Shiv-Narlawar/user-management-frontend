@@ -12,19 +12,31 @@ export default function ProtectedRoute({
   allowedRoles,
   requiredPermissions,
 }: Props) {
-  const { user } = useAuth();
+
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-slate-400">
+        Loading session...
+      </div>
+    );
+  }
 
   // Not logged in
+   
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
   // Role-based protection
+   
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/app/dashboard" replace />;
   }
 
-  // Permission-based protection (JWT permissions array)
+  // Permission-based protection
+   
   if (
     requiredPermissions &&
     !requiredPermissions.every((p) =>

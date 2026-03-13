@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter, useNavigate } from "react-router-dom";
+import { Auth0Provider } from "@auth0/auth0-react";
+
 import App from "./App";
 import "./index.css";
 
@@ -15,7 +17,7 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
-      staleTime: 15000, // 15 seconds
+      staleTime: 15000,
     },
     mutations: {
       retry: 0,
@@ -23,22 +25,58 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * Auth0 Provider wrapper so we can use React Router navigation
+ */
+function Auth0ProviderWithNavigate({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const navigate = useNavigate();
+
+  const onRedirectCallback = (appState?: { returnTo?: string }) => {
+    const target = appState?.returnTo ?? "/app/dashboard";
+    navigate(target, { replace: true });
+  };
+
+  return (
+    <Auth0Provider
+      domain={import.meta.env.VITE_AUTH0_DOMAIN}
+      clientId={import.meta.env.VITE_AUTH0_CLIENT_ID}
+      authorizationParams={{
+        redirect_uri: window.location.origin,
+        audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+        scope: "openid profile email",
+      }}
+      cacheLocation="localstorage"
+      useRefreshTokens={true}
+      onRedirectCallback={onRedirectCallback}
+    >
+      {children}
+    </Auth0Provider>
+  );
+}
+
+/**
+ * React Root
+ */
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <ToastProvider>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </ToastProvider>
+        <Auth0ProviderWithNavigate>
+          <ToastProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </ToastProvider>
+        </Auth0ProviderWithNavigate>
       </BrowserRouter>
 
-      {/* Devtools only in development */}
-      {import.meta.env.NODE_ENV === "development" && (
+      {import.meta.env.DEV && (
         <ReactQueryDevtools initialIsOpen={false} />
       )}
-
     </QueryClientProvider>
   </React.StrictMode>
 );

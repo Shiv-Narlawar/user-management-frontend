@@ -1,6 +1,17 @@
-import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+
 import type { AuthUser } from "../services/auth.service";
-import { logout as logoutApi, getCurrentUser } from "../services/auth.service";
+import { getCurrentUser } from "../services/auth.service";
+
+import { useAuth0 } from "@auth0/auth0-react";
+import { setAuth0TokenGetter } from "../lib/auth0Token";
 
 type AuthContextType = {
   user: AuthUser | null;
@@ -18,79 +29,94 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 
+  const {
+    getAccessTokenSilently,
+    logout,
+    isAuthenticated,
+    isLoading: auth0Loading,
+  } = useAuth0();
+
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshUser = async () => {
-    const token = localStorage.getItem("accessToken");
-
-    if (!token) {
-      setUser(null);
-      return;
-    }
-
-    const current = getCurrentUser();
-    setUser(current);
-  };
 
   useEffect(() => {
-    async function bootstrap() {
-      const token = localStorage.getItem("accessToken");
+    setAuth0TokenGetter(async () => {
+      return await getAccessTokenSilently();
+    });
+  }, [getAccessTokenSilently]);
 
-      if (!token) {
-        setLoading(false);
+
+  const refreshUser = useCallback(async () => {
+    try {
+
+      const current = await getCurrentUser();
+
+      if (!current) {
+        setUser(null);
         return;
       }
 
+      setUser(current);
+
+    } catch (err) {
+
+      console.error("Auth bootstrap failed:", err);
+      setUser(null);
+
+    }
+  }, []);
+
+  useEffect(() => {
+
+    if (auth0Loading) return;
+
+    const bootstrap = async () => {
+
       try {
-        await refreshUser();
-      } catch {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("authUser");
-        setUser(null);
+
+        const localToken = localStorage.getItem("accessToken");
+
+        if (isAuthenticated || localToken) {
+          await refreshUser();
+        } else {
+          setUser(null);
+        }
+
       } finally {
         setLoading(false);
       }
-    }
 
-    void bootstrap();
+    };
+
+    bootstrap();
+
+  }, [isAuthenticated, auth0Loading, refreshUser]);
+
+  const setUserFromAuth = useCallback((next: AuthUser | null) => {
+    setUser(next);
   }, []);
 
-  const setUserFromAuth = (next: AuthUser | null) => {
-    setUser(next);
-  };
-
-  // Update user locally without refetch
-  const patchUserLocal = (partial: Partial<AuthUser>) => {
+  const patchUserLocal = useCallback((partial: Partial<AuthUser>) => {
     setUser((prev) => (prev ? { ...prev, ...partial } : prev));
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
 
-    const refreshToken = localStorage.getItem("refreshToken");
-
-    // Clear immediately
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("authUser");
-
+    localStorage.clear();
     setUser(null);
 
-    try {
-      if (refreshToken) {
-        await logoutApi(refreshToken);
-      }
-    } catch {
-      // ignore errors
-    } finally {
-      window.location.href = "/login";
-    }
-  };
+    logout({
+      logoutParams: {
+        returnTo: window.location.origin,
+      },
+    });
 
-  const clearSession = async () => {
+  }, [logout]);
+
+  const clearSession = useCallback(async () => {
     await signOut();
-  };
+  }, [signOut]);
 
   const value = useMemo(
     () => ({
@@ -102,7 +128,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshUser,
       patchUserLocal,
     }),
-    [user, loading]
+    [
+      user,
+      loading,
+      setUserFromAuth,
+      signOut,
+      clearSession,
+      refreshUser,
+      patchUserLocal,
+    ]
   );
 
   return (
@@ -119,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
+
   const ctx = useContext(AuthContext);
 
   if (!ctx) {
