@@ -1,7 +1,7 @@
 import { getAuth0Token } from "./auth0Token";
 
 export const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:7000/api";
+  import.meta.env.VITE_API_BASE_URL || "http://13.233.159.18:7000/api";
 
 function getLocalToken(): string | null {
   return localStorage.getItem("accessToken");
