@@ -1,6 +1,17 @@
-import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+
 import type { AuthUser } from "../services/auth.service";
-import { logout as logoutApi, getCurrentUser } from "../services/auth.service";
+import { getCurrentUser } from "../services/auth.service";
+
+import { useAuth0 } from "@auth0/auth0-react";
+import { setAuth0TokenGetter } from "../lib/auth0Token";
 
 type AuthContextType = {
   user: AuthUser | null;
@@ -17,80 +28,115 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const {
+    getAccessTokenSilently,
+    logout,
+    isAuthenticated,
+    isLoading: auth0Loading,
+  } = useAuth0();
 
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshUser = async () => {
-    const token = localStorage.getItem("accessToken");
-
-    if (!token) {
-      setUser(null);
-      return;
-    }
-
-    const current = getCurrentUser();
-    setUser(current);
-  };
+  /* =====================================================
+     REGISTER AUTH0 TOKEN GETTER
+  ===================================================== */
 
   useEffect(() => {
-    async function bootstrap() {
-      const token = localStorage.getItem("accessToken");
+    setAuth0TokenGetter(async () => {
+      const token = await getAccessTokenSilently({
+        authorizationParams: {
+          audience: "https://user-management-api",
+        },
+      });
 
-      if (!token) {
-        setLoading(false);
+      return token;
+    });
+  }, [getAccessTokenSilently]);
+
+  /* =====================================================
+     LOAD USER FROM BACKEND
+  ===================================================== */
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const current = await getCurrentUser();
+
+      if (!current) {
+        setUser(null);
         return;
       }
 
+      setUser(current);
+    } catch (err) {
+      console.error("Failed to fetch user:", err);
+      setUser(null);
+    }
+  }, []);
+
+  /* =====================================================
+     BOOTSTRAP AUTH SESSION
+  ===================================================== */
+
+  useEffect(() => {
+    if (auth0Loading) return;
+
+    const bootstrap = async () => {
       try {
-        await refreshUser();
-      } catch {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("authUser");
-        setUser(null);
+        const localToken = localStorage.getItem("accessToken");
+
+        if (isAuthenticated) {
+          // 🔥 Ensure Auth0 token exists before calling backend
+          await getAccessTokenSilently({
+            authorizationParams: {
+              audience: "https://user-management-api",
+            },
+          });
+
+          await refreshUser();
+        } else if (localToken) {
+          await refreshUser();
+        } else {
+          setUser(null);
+        }
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    void bootstrap();
+    bootstrap();
+  }, [isAuthenticated, auth0Loading, refreshUser, getAccessTokenSilently]);
+
+  /* =====================================================
+     HELPERS
+  ===================================================== */
+
+  const setUserFromAuth = useCallback((next: AuthUser | null) => {
+    setUser(next);
   }, []);
 
-  const setUserFromAuth = (next: AuthUser | null) => {
-    setUser(next);
-  };
-
-  // Update user locally without refetch
-  const patchUserLocal = (partial: Partial<AuthUser>) => {
+  const patchUserLocal = useCallback((partial: Partial<AuthUser>) => {
     setUser((prev) => (prev ? { ...prev, ...partial } : prev));
-  };
+  }, []);
 
-  const signOut = async () => {
-
-    const refreshToken = localStorage.getItem("refreshToken");
-
-    // Clear immediately
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("authUser");
-
+  const signOut = useCallback(async () => {
+    localStorage.clear();
     setUser(null);
 
-    try {
-      if (refreshToken) {
-        await logoutApi(refreshToken);
-      }
-    } catch {
-      // ignore errors
-    } finally {
-      window.location.href = "/login";
-    }
-  };
+    logout({
+      logoutParams: {
+        returnTo: window.location.origin,
+      },
+    });
+  }, [logout]);
 
-  const clearSession = async () => {
+  const clearSession = useCallback(async () => {
     await signOut();
-  };
+  }, [signOut]);
+
+  /* =====================================================
+     CONTEXT VALUE
+  ===================================================== */
 
   const value = useMemo(
     () => ({
@@ -102,7 +148,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshUser,
       patchUserLocal,
     }),
-    [user, loading]
+    [
+      user,
+      loading,
+      setUserFromAuth,
+      signOut,
+      clearSession,
+      refreshUser,
+      patchUserLocal,
+    ]
   );
 
   return (

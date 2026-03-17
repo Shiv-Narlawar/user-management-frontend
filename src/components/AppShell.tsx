@@ -1,4 +1,3 @@
-import React from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
 import {
   Shield,
@@ -14,6 +13,10 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import { useMedia } from "../hooks/useMedia";
+
+/* ======================================================
+   Sidebar Navigation Item
+====================================================== */
 
 function NavItem({
   to,
@@ -42,6 +45,10 @@ function NavItem({
     </Link>
   );
 }
+
+/* ======================================================
+   Mobile Bottom Navigation Item
+====================================================== */
 
 function BottomIcon({
   to,
@@ -82,9 +89,22 @@ function BottomIcon({
   );
 }
 
+/* ======================================================
+   Main Application Shell
+====================================================== */
+
 export function AppShell() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading } = useAuth();
   const isDesktop = useMedia("(min-width: 1024px)");
+
+  /** Prevent redirect flicker while session loads */
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen text-slate-400">
+        Loading session...
+      </div>
+    );
+  }
 
   const role = user?.role ?? "USER";
 
@@ -105,7 +125,7 @@ export function AppShell() {
     },
   ];
 
-  // Manager navigation
+  /* Manager Navigation */
   if (role === "MANAGER") {
     nav.push({
       to: "/app/my-department",
@@ -114,7 +134,7 @@ export function AppShell() {
     });
   }
 
-  // Admin navigation
+  /* Admin Navigation */
   if (role === "ADMIN") {
     nav.push({
       to: "/app/departments",
@@ -189,6 +209,7 @@ export function AppShell() {
 
               {/* User Card */}
               <div className="mt-4 rounded-3xl border border-slate-800 bg-slate-900/30 p-4">
+
                 <div className="flex items-center gap-3">
 
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
@@ -196,16 +217,19 @@ export function AppShell() {
                   </div>
 
                   <div className="min-w-0">
+
                     <div className="truncate text-sm font-semibold text-slate-100">
-                      {user?.name ?? "—"}
-                    </div>
+  {user?.name || user?.email?.split("@")[0] || "User"}
+</div>
 
                     <div className="truncate text-xs text-slate-400">
                       {user?.role ?? ""}
                     </div>
+
                   </div>
 
                 </div>
+
               </div>
 
             </aside>
@@ -221,6 +245,7 @@ export function AppShell() {
         {/* Mobile Bottom Nav */}
         {!isDesktop && (
           <div className="fixed inset-x-0 bottom-0 z-40 p-3">
+
             <div className="mx-auto max-w-2xl glass rounded-3xl px-3 py-2">
 
               <div className="flex items-center justify-around">
@@ -230,6 +255,7 @@ export function AppShell() {
               </div>
 
             </div>
+
           </div>
         )}
 
