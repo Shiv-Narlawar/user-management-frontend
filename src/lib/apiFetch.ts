@@ -1,7 +1,7 @@
 import { getAuth0Token } from "./auth0Token";
 
 export const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://13.233.159.18:7000/api";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:7000/api";
 
 function getLocalToken(): string | null {
   return localStorage.getItem("accessToken");
@@ -53,12 +53,14 @@ export async function apiFetch<T = unknown>(
 
   let accessToken: string | null = null;
 
+  /**
+   * 1️⃣ Try Auth0 token first
+   */
   const auth0Token = await getAuth0Token();
 
   if (auth0Token) {
     accessToken = auth0Token;
   } else {
-
     accessToken = getLocalToken();
   }
 
@@ -79,7 +81,10 @@ export async function apiFetch<T = unknown>(
     headers,
   });
 
-  const usingLocalJWT = !!getLocalToken();
+  /**
+   * 2️⃣ Only refresh token if using LOCAL JWT
+   */
+  const usingLocalJWT = !auth0Token && !!getLocalToken();
 
   if (response.status === 401 && usingLocalJWT && !isAuthEndpoint(endpoint)) {
 

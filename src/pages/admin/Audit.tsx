@@ -26,10 +26,35 @@ interface AuditResponse {
 
 const LIMIT = 10;
 
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+function parseAuditDate(value: string) {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+
+  // If backend sends ISO with timezone, use directly
+  // Example: 2026-03-16T10:30:00.000Z
+  const hasTimezone =
+    trimmed.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(trimmed);
+
+  const parsed = new Date(hasTimezone ? trimmed : `${trimmed}Z`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function formatDate(value: string) {
+  const date = parseAuditDate(value);
+
+  if (!date) return value;
+
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }).format(date);
 }
 
 function actionBadge(action: string) {
@@ -55,6 +80,24 @@ function actionBadge(action: string) {
   return `${base} text-slate-300 border-slate-700 bg-slate-800`;
 }
 
+function normalizeRows(rows: AuditRow[]) {
+  const uniqueMap = new Map<string, AuditRow>();
+
+  for (const row of rows) {
+    if (!row?.id) continue;
+
+    if (!uniqueMap.has(row.id)) {
+      uniqueMap.set(row.id, row);
+    }
+  }
+
+  return Array.from(uniqueMap.values()).sort((a, b) => {
+    const aTime = parseAuditDate(a.createdAt)?.getTime() ?? 0;
+    const bTime = parseAuditDate(b.createdAt)?.getTime() ?? 0;
+    return bTime - aTime;
+  });
+}
+
 export default function Audit() {
   const [q, setQ] = useState("");
   const dq = useDebounce(q, 350);
@@ -72,7 +115,7 @@ export default function Audit() {
   }, [dq]);
 
   useEffect(() => {
-    let mounted = true;
+    let ignore = false;
 
     async function load() {
       setLoading(true);
@@ -84,48 +127,61 @@ export default function Audit() {
           )}&page=${page}&limit=${LIMIT}`
         )) as AuditResponse;
 
-        if (!mounted) return;
+        if (ignore) return;
 
-        setRows(res.data ?? []);
-        setTotal(res.total ?? 0);
-        setTotalPages(res.totalPages ?? 1);
-      } catch {
-        if (!mounted) return;
+        const normalizedRows = normalizeRows(res.data ?? []);
 
+        setRows(normalizedRows);
+        setTotal(res.total ?? normalizedRows.length ?? 0);
+        setTotalPages(Math.max(res.totalPages ?? 1, 1));
+      } catch (error) {
+        if (ignore) return;
+
+        console.error("Failed to load audit logs:", error);
         setRows([]);
         setTotal(0);
         setTotalPages(1);
       } finally {
-        if (mounted) setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     }
 
     load();
 
     return () => {
-      mounted = false;
+      ignore = true;
     };
   }, [dq, page]);
 
-  const start = useMemo(() => (page - 1) * LIMIT + 1, [page]);
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages || 1);
+    }
+  }, [page, totalPages]);
 
-  const end = useMemo(() => Math.min(page * LIMIT, total), [page, total]);
+  const start = useMemo(() => {
+    if (total === 0) return 0;
+    return (page - 1) * LIMIT + 1;
+  }, [page, total]);
+
+  const end = useMemo(() => {
+    if (total === 0) return 0;
+    return Math.min(page * LIMIT, total);
+  }, [page, total]);
 
   return (
     <div className="space-y-6">
-
       {/* Header */}
       <Card className="p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
-
           <div>
             <div className="text-blue-300 text-sm font-semibold tracking-widest">
               ADMIN PANEL
             </div>
 
-            <h1 className="text-3xl font-extrabold mt-1">
-              Audit Logs
-            </h1>
+            <h1 className="text-3xl font-extrabold mt-1">Audit Logs</h1>
 
             <p className="text-slate-400 mt-1 text-sm">
               View system activities and administrative actions.
@@ -133,7 +189,6 @@ export default function Audit() {
           </div>
 
           <div className="flex items-center gap-3">
-
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -150,17 +205,13 @@ export default function Audit() {
             >
               Reset
             </Button>
-
           </div>
-
         </div>
       </Card>
 
       {/* Table */}
       <Card className="p-0 overflow-hidden">
-
         <table className="w-full text-sm">
-
           <thead className="bg-slate-950/40 border-b border-slate-800">
             <tr className="text-slate-300">
               <th className="px-6 py-3 text-left">Time</th>
@@ -171,7 +222,6 @@ export default function Audit() {
           </thead>
 
           <tbody>
-
             {loading ? (
               <tr>
                 <td colSpan={4} className="px-6 py-6 text-slate-400">
@@ -190,14 +240,12 @@ export default function Audit() {
                   key={r.id}
                   className="border-b border-slate-800/70 hover:bg-slate-900/25"
                 >
-                  <td className="px-6 py-4 text-slate-300">
+                  <td className="px-6 py-4 text-slate-300 whitespace-nowrap">
                     {formatDate(r.createdAt)}
                   </td>
 
                   <td className="px-6 py-4">
-                    <span className={actionBadge(r.action)}>
-                      {r.action}
-                    </span>
+                    <span className={actionBadge(r.action)}>{r.action}</span>
                   </td>
 
                   <td className="px-6 py-4 text-slate-300">
@@ -210,25 +258,21 @@ export default function Audit() {
                 </tr>
               ))
             )}
-
           </tbody>
-
         </table>
-
       </Card>
 
       {/* Pagination */}
       <div className="flex items-center justify-between">
-
         <div className="text-sm text-slate-400">
-          Showing {total === 0 ? 0 : start} – {end} of {total}
+          Showing {start} – {end} of {total}
+          {totalPages > 1 ? ` • Page ${page} of ${totalPages}` : ""}
         </div>
 
         <div className="flex gap-2">
-
           <Button
             variant="ghost"
-            disabled={page === 1}
+            disabled={page === 1 || loading}
             onClick={() => setPage((p) => p - 1)}
           >
             Previous
@@ -236,16 +280,13 @@ export default function Audit() {
 
           <Button
             variant="ghost"
-            disabled={page >= totalPages}
+            disabled={page >= totalPages || loading}
             onClick={() => setPage((p) => p + 1)}
           >
             Next
           </Button>
-
         </div>
-
       </div>
-
     </div>
   );
 }

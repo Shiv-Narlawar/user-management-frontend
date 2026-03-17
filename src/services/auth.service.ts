@@ -21,9 +21,12 @@ export interface AuthResponse {
   message?: string;
 }
 
-//Store tokens + user locally
- 
+/* =====================================================
+   TOKEN STORAGE
+===================================================== */
+
 function setTokens(token: string, refreshToken?: string, user?: AuthUser) {
+
   localStorage.setItem("accessToken", token);
 
   if (refreshToken) {
@@ -35,14 +38,17 @@ function setTokens(token: string, refreshToken?: string, user?: AuthUser) {
   }
 }
 
-//SIGNUP
- 
+/* =====================================================
+   SIGNUP
+===================================================== */
+
 export async function signup(payload: {
   name: string;
   email: string;
   password: string;
   role: "USER" | "MANAGER";
 }): Promise<AuthResponse> {
+
   const result = (await apiFetch("/auth/signup", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -53,15 +59,19 @@ export async function signup(payload: {
   }
 
   setTokens(result.token, result.refreshToken, result.user);
+
   return result;
 }
 
-// LOGIN (Local login)
- 
+/* =====================================================
+   LOGIN (LOCAL AUTH)
+===================================================== */
+
 export async function login(payload: {
   email: string;
   password: string;
 }): Promise<AuthResponse> {
+
   const result = (await apiFetch("/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -72,19 +82,27 @@ export async function login(payload: {
   }
 
   setTokens(result.token, result.refreshToken, result.user);
+
   return result;
 }
 
-// LOGOUT
- 
+/* =====================================================
+   LOGOUT
+===================================================== */
+
 export async function logout(refreshToken: string | null): Promise<void> {
+
   try {
+
     if (refreshToken) {
+
       await apiFetch("/auth/logout", {
         method: "POST",
         body: JSON.stringify({ refreshToken }),
       });
+
     }
+
   } catch {
     // ignore logout errors
   }
@@ -94,9 +112,12 @@ export async function logout(refreshToken: string | null): Promise<void> {
   localStorage.removeItem("authUser");
 }
 
-// REFRESH TOKEN
- 
+/* =====================================================
+   REFRESH TOKEN
+===================================================== */
+
 export async function refresh(refreshToken: string): Promise<AuthResponse> {
+
   const result = (await apiFetch("/auth/refresh", {
     method: "POST",
     body: JSON.stringify({ refreshToken }),
@@ -107,48 +128,72 @@ export async function refresh(refreshToken: string): Promise<AuthResponse> {
   }
 
   setTokens(result.token, result.refreshToken, result.user);
+
   return result;
 }
 
-//PASSWORD RESET REQUEST
- 
+/* =====================================================
+   PASSWORD RESET
+===================================================== */
+
 export async function requestPasswordReset(
   email: string
 ): Promise<AuthResponse> {
+
   return (await apiFetch("/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify({ email }),
   })) as AuthResponse;
 }
 
-//RESET PASSWORD
- 
 export async function resetPassword(payload: {
   email: string;
   newPassword: string;
 }): Promise<AuthResponse> {
+
   return (await apiFetch("/auth/reset-password", {
     method: "POST",
     body: JSON.stringify(payload),
   })) as AuthResponse;
 }
 
-// FORGOT USERNAME
- 
+/* =====================================================
+   FORGOT USERNAME
+===================================================== */
+
 export async function forgotUsername(payload: {
   email: string;
 }): Promise<AuthResponse> {
+
   return (await apiFetch("/auth/forgot-username", {
     method: "POST",
     body: JSON.stringify(payload),
   })) as AuthResponse;
 }
 
+/* =====================================================
+   GET CURRENT USER (RBAC SOURCE OF TRUTH)
+===================================================== */
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
+
   try {
 
-    const token = await getAuth0Token();
+    let token: string | null = null;
+
+    /* Try Auth0 token first */
+
+    const auth0Token = await getAuth0Token();
+
+    if (auth0Token) {
+      token = auth0Token;
+    } else {
+      token = localStorage.getItem("accessToken");
+    }
+
+    if (!token) {
+      return null;
+    }
 
     const user = (await apiFetch("/auth/me", {
       headers: {
@@ -162,7 +207,10 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
     return user;
 
-  } catch {
+  } catch (err) {
+
+    console.error("Failed to fetch current user", err);
+
     return null;
   }
 }

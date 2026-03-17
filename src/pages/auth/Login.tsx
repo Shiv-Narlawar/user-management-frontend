@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, ShieldCheck } from "lucide-react";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -19,11 +19,12 @@ type LoginForm = {
 };
 
 export default function LoginPage() {
+
   const navigate = useNavigate();
   const { push } = useToast();
   const { setUserFromAuth } = useAuth();
 
-  const { loginWithRedirect } = useAuth0();
+  const { loginWithRedirect, isLoading: auth0Loading } = useAuth0();
 
   const [form, setForm] = useState<LoginForm>({
     email: "",
@@ -36,7 +37,9 @@ export default function LoginPage() {
   const onChange =
     (key: keyof LoginForm) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = key === "remember" ? e.target.checked : e.target.value;
+
+      const value =
+        key === "remember" ? e.target.checked : e.target.value;
 
       setForm((prev) => ({
         ...prev,
@@ -44,7 +47,12 @@ export default function LoginPage() {
       }));
     };
 
+  /* =========================================================
+     LOCAL LOGIN
+  ========================================================= */
+
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+
     e.preventDefault();
 
     if (!form.email || !form.password) {
@@ -55,6 +63,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+
       const res = await login({
         email: form.email.trim(),
         password: form.password,
@@ -67,45 +76,74 @@ export default function LoginPage() {
       setUserFromAuth(res.user);
 
       push("success", "Welcome back 👋");
-      navigate("/app/dashboard", { replace: true });
+
+      /* Let AppShell decide portal */
+      navigate("/app", { replace: true });
+
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Login failed";
+
+      const msg =
+        err instanceof Error ? err.message : "Login failed";
+
       push("error", msg);
+
     } finally {
+
       setLoading(false);
+
     }
   };
 
-  // Auth0 Login
-   
+  /* =========================================================
+     AUTH0 LOGIN
+  ========================================================= */
+
   const handleAuth0Login = async () => {
-  await loginWithRedirect({
-    authorizationParams: {
-      audience: import.meta.env.VITE_AUTH0_AUDIENCE,
-      prompt: "login", // forces login screen so you can choose user
-    },
-    appState: {
-      returnTo: "/app/dashboard",
-    },
-  });
-};
+
+    try {
+
+      await loginWithRedirect({
+        authorizationParams: {
+          audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+          redirect_uri: window.location.origin,
+          prompt: "login",
+        },
+        appState: {
+          returnTo: "/app",
+        },
+      });
+
+    } catch {
+
+      push("error", "Auth0 login failed");
+
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-12 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+
       <Card className="w-full max-w-md p-10 bg-slate-900/90 backdrop-blur-xl border border-slate-800 shadow-2xl">
+
+        {/* Header */}
         <div className="flex flex-col items-center mb-8">
+
           <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600/20 text-blue-400 mb-3">
             <ShieldCheck size={26} />
           </div>
 
-          <h1 className="text-3xl font-bold text-white">RBAC Manager</h1>
+          <h1 className="text-3xl font-bold text-white">
+            RBAC Manager
+          </h1>
 
           <p className="text-sm text-slate-400 mt-1">
             Secure access control platform
           </p>
+
         </div>
 
         <form onSubmit={onSubmit} className="space-y-5">
+
           <Input
             label="Email"
             type="email"
@@ -127,14 +165,18 @@ export default function LoginPage() {
           />
 
           <div className="flex items-center justify-between text-sm">
+
             <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
+
               <input
                 type="checkbox"
                 checked={form.remember}
                 onChange={onChange("remember")}
                 className="accent-blue-500"
               />
+
               Remember me
+
             </label>
 
             <Link
@@ -143,9 +185,14 @@ export default function LoginPage() {
             >
               Forgot password?
             </Link>
+
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full">
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full"
+          >
             {loading ? "Signing in..." : "Sign In"}
           </Button>
 
@@ -158,22 +205,29 @@ export default function LoginPage() {
           <Button
             type="button"
             onClick={handleAuth0Login}
+            disabled={auth0Loading}
             className="w-full bg-indigo-600 hover:bg-indigo-500"
           >
-            Continue with Auth0
+            {auth0Loading ? "Redirecting..." : "Continue with Auth0"}
           </Button>
 
           <p className="text-sm text-slate-400 text-center">
+
             Don’t have an account?{" "}
+
             <Link
               to="/signup"
               className="text-blue-400 hover:text-blue-300 font-semibold"
             >
               Create one
             </Link>
+
           </p>
+
         </form>
+
       </Card>
+
     </div>
   );
 }
