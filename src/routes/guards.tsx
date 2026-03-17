@@ -44,6 +44,11 @@ export function RequireRole({ role }: { role: Role }) {
     return <Outlet />;
   }
 
+  if (user.role === "ADMIN") {
+    return <Outlet />;
+  }
+
+  // normal role check
   if (user.role !== role) {
     return <Navigate to="/app/dashboard" replace />;
   }
