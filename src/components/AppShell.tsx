@@ -219,8 +219,8 @@ export function AppShell() {
                   <div className="min-w-0">
 
                     <div className="truncate text-sm font-semibold text-slate-100">
-                      {user?.name ?? "—"}
-                    </div>
+  {user?.name || user?.email?.split("@")[0] || "User"}
+</div>
 
                     <div className="truncate text-xs text-slate-400">
                       {user?.role ?? ""}
