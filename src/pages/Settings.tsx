@@ -1,9 +1,10 @@
-import  { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { useAuth } from "../context/AuthContext";
 import { updateMyProfile } from "../services/users.service";
+import { useToast } from "../context/ToastContext";
 import {
   CheckCircle2,
   Loader2,
@@ -11,9 +12,7 @@ import {
   Save,
   Shield,
   Sun,
-  User,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import type { AuthUser } from "../services/auth.service";
 
 type Tab = "account" | "security" | "preferences";
@@ -24,29 +23,16 @@ function cx(...s: Array<string | false | undefined>) {
 }
 
 function getRoleLabel(u: AuthUser | null): string {
-  if (!u) return "USER";
-
-  const obj = u as unknown as Record<string, unknown>;
-  const role = obj["role"];
-  const roleName = obj["roleName"];
-
-  if (typeof role === "string" && role.trim()) return role;
-  if (typeof roleName === "string" && roleName.trim()) return roleName;
-
-  return "USER";
+  return u?.role ?? "USER";
 }
 
 function getStatusLabel(u: AuthUser | null): string {
-  if (!u) return "—";
-
-  const obj = u as unknown as Record<string, unknown>;
-  const status = obj["status"];
-  return typeof status === "string" && status.trim() ? status : "—";
+  return u?.status ?? "—";
 }
 
 export default function SettingsPage() {
   const { user, patchUserLocal } = useAuth();
-  const navigate = useNavigate();
+  const { push } = useToast();
 
   const roleLabel = getRoleLabel(user);
   const statusLabel = getStatusLabel(user);
@@ -54,144 +40,123 @@ export default function SettingsPage() {
 
   const [tab, setTab] = useState<Tab>("account");
 
-  // ---------------- PROFILE ----------------
-  const [name, setName] = useState<string>(user?.name ?? "");
+  // profile
+  const [name, setName] = useState(user?.name ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     setName(user?.name ?? "");
   }, [user?.name]);
 
-  const [saving, setSaving] = useState<boolean>(false);
-  const [saved, setSaved] = useState<boolean>(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
   const canSave = useMemo(() => {
-    const trimmed = name.trim();
-    return Boolean(trimmed) && trimmed !== (user?.name ?? "").trim() && !saving;
+    return name.trim() && name !== user?.name && !saving;
   }, [name, user?.name, saving]);
 
   async function onSaveProfile() {
-    const trimmed = name.trim();
-    setSaving(true);
-    setSaved(false);
-    setErrorMsg(null);
-
     try {
-      const updated = await updateMyProfile({ name: trimmed });
+      setSaving(true);
+
+      const updated = await updateMyProfile({
+        name: name.trim(),
+      });
 
       patchUserLocal({ name: updated.name });
 
       setSaved(true);
       setTimeout(() => setSaved(false), 1200);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to update profile";
-      setErrorMsg(msg);
+
+      push("success", "Profile updated");
+    } catch {
+      push("error", "Failed to update profile");
     } finally {
       setSaving(false);
     }
   }
 
-  // ---------------- PREFERENCES ----------------
+  // auth0 reset
+  async function handleChangePassword() {
+    try {
+      await fetch(
+        `https://${import.meta.env.VITE_AUTH0_DOMAIN}/dbconnections/change_password`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            client_id: import.meta.env.VITE_AUTH0_CLIENT_ID,
+            email,
+            connection: "Username-Password-Authentication",
+          }),
+        }
+      );
+
+      push("success", "Password reset email sent");
+    } catch {
+      push("error", "Failed to send reset email");
+    }
+  }
+
+  // theme
   const [theme, setTheme] = useState<Theme>(
     (localStorage.getItem("theme") as Theme) || "dark"
   );
 
-  const [compactTables, setCompactTables] = useState<boolean>(
-    localStorage.getItem("pref_compactTables") === "true"
-  );
-
-  const [reduceMotion, setReduceMotion] = useState<boolean>(
-    localStorage.getItem("pref_reduceMotion") === "true"
-  );
-
   useEffect(() => {
     localStorage.setItem("theme", theme);
-    document.documentElement.classList.toggle("dark", theme === "dark");
+
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
   }, [theme]);
-
-  useEffect(() => {
-    localStorage.setItem("pref_compactTables", String(compactTables));
-  }, [compactTables]);
-
-  useEffect(() => {
-    localStorage.setItem("pref_reduceMotion", String(reduceMotion));
-  }, [reduceMotion]);
-
-  // ---------------- SECURITY ----------------
-  const [loginAlerts, setLoginAlerts] = useState<boolean>(
-    localStorage.getItem("sec_loginAlerts") !== "false"
-  );
-
-  const [twoFA, setTwoFA] = useState<boolean>(
-    localStorage.getItem("sec_twoFA") === "true"
-  );
-
-  useEffect(() => {
-    localStorage.setItem("sec_loginAlerts", String(loginAlerts));
-  }, [loginAlerts]);
-
-  useEffect(() => {
-    localStorage.setItem("sec_twoFA", String(twoFA));
-  }, [twoFA]);
 
   return (
     <div className="space-y-5">
 
       {/* HEADER */}
       <Card className="p-6">
-        <div className="text-4xl font-extrabold">Settings</div>
-        <div className="text-slate-400 mt-2">
-          Update your profile, security options, and preferences.
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="text-blue-300 text-sm font-semibold tracking-widest">
+              ACCOUNT
+            </div>
+
+            <div className="text-4xl font-extrabold mt-2">
+              Settings
+            </div>
+
+            <div className="text-slate-400 mt-2">
+              Manage your profile, security and preferences
+            </div>
+          </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          <button
-            onClick={() => setTab("account")}
-            className={cx(
-              "inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold border transition",
-              tab === "account"
-                ? "bg-blue-600/15 text-blue-200 border-blue-500/25"
-                : "bg-slate-900/30 text-slate-300 border-slate-800 hover:bg-slate-900/50"
-            )}
-          >
-            <User size={16} />
-            Account
-          </button>
-
-          <button
-            onClick={() => setTab("security")}
-            className={cx(
-              "inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold border transition",
-              tab === "security"
-                ? "bg-blue-600/15 text-blue-200 border-blue-500/25"
-                : "bg-slate-900/30 text-slate-300 border-slate-800 hover:bg-slate-900/50"
-            )}
-          >
-            <Shield size={16} />
-            Security
-          </button>
-
-          <button
-            onClick={() => setTab("preferences")}
-            className={cx(
-              "inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold border transition",
-              tab === "preferences"
-                ? "bg-blue-600/15 text-blue-200 border-blue-500/25"
-                : "bg-slate-900/30 text-slate-300 border-slate-800 hover:bg-slate-900/50"
-            )}
-          >
-            {theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
-            Preferences
-          </button>
+        <div className="mt-5 flex gap-2">
+          {(["account", "security", "preferences"] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={cx(
+                "px-4 py-2 rounded-2xl text-sm font-semibold border transition",
+                tab === t
+                  ? "bg-blue-600/15 text-blue-200 border-blue-500/25"
+                  : "bg-slate-900/30 text-slate-300 border-slate-800 hover:bg-slate-900/50"
+              )}
+            >
+              {t.toUpperCase()}
+            </button>
+          ))}
         </div>
       </Card>
 
-      {/* ACCOUNT TAB */}
+      {/* ACCOUNT */}
       {tab === "account" && (
-        <Card className="p-6">
+        <Card className="p-6 space-y-5">
           <div className="text-lg font-bold">Profile</div>
 
-          <div className="mt-5 space-y-4">
+          <div className="space-y-4">
+
             <div>
               <div className="text-sm text-slate-400">Name</div>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -206,10 +171,6 @@ export default function SettingsPage() {
               <Input value={roleLabel} readOnly />
               <Input value={statusLabel} readOnly />
             </div>
-
-            {errorMsg && (
-              <div className="text-rose-400 text-sm">{errorMsg}</div>
-            )}
 
             <div className="flex items-center gap-3">
               <Button onClick={onSaveProfile} disabled={!canSave} className="gap-2">
@@ -228,95 +189,70 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
+
           </div>
         </Card>
       )}
 
-      {/* SECURITY TAB */}
+      {/* SECURITY */}
       {tab === "security" && (
-        <Card className="p-6">
-          <div className="text-lg font-bold">Security</div>
+  <Card className="p-6">
+    <div className="text-lg font-bold">Security</div>
 
-          <div className="mt-5 flex gap-2">
-            <Button onClick={() => navigate("/update-password")} className="gap-2">
-              <Shield size={16} />
-              Change password
-            </Button>
+    <div className="mt-5 space-y-4">
+
+      <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
+        
+        <div>
+          <div className="text-sm font-semibold text-slate-200">
+            Password
           </div>
 
-          <div className="mt-6 space-y-3">
-
-            <label className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
-              <span>
-                <div className="font-semibold text-slate-200">Login alerts</div>
-                <div className="text-sm text-slate-400">Stored locally</div>
-              </span>
-              <input
-                type="checkbox"
-                checked={loginAlerts}
-                onChange={(e) => setLoginAlerts(e.target.checked)}
-              />
-            </label>
-
-            <label className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
-              <span>
-                <div className="font-semibold text-slate-200">
-                  Two-factor authentication
-                </div>
-                <div className="text-sm text-slate-400">UI toggle</div>
-              </span>
-              <input
-                type="checkbox"
-                checked={twoFA}
-                onChange={(e) => setTwoFA(e.target.checked)}
-              />
-            </label>
-
+          <div className="text-xs text-slate-400 mt-1">
+            Reset your password via email
           </div>
-        </Card>
-      )}
+        </div>
 
-      {/* PREFERENCES TAB */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleChangePassword}
+          className="gap-2"
+        >
+          <Shield size={14} />
+          Change
+        </Button>
+
+      </div>
+
+    </div>
+  </Card>
+)}
+
+      {/* PREFERENCES */}
       {tab === "preferences" && (
-        <Card className="p-6">
+        <Card className="p-6 space-y-5">
           <div className="text-lg font-bold">Appearance</div>
 
-          <div className="mt-4 flex justify-between items-center">
+          <div className="flex items-center justify-between">
             <span className="text-slate-300">Theme</span>
 
             <Button
               variant="ghost"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              onClick={() =>
+                setTheme(theme === "dark" ? "light" : "dark")
+              }
             >
               {theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
               {theme}
             </Button>
           </div>
 
-          <div className="mt-5 space-y-3">
-
-            <label className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
-              <span className="text-slate-200">Compact tables</span>
-              <input
-                type="checkbox"
-                checked={compactTables}
-                onChange={(e) => setCompactTables(e.target.checked)}
-              />
-            </label>
-
-            <label className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
-              <span className="text-slate-200">Reduce motion</span>
-              <input
-                type="checkbox"
-                checked={reduceMotion}
-                onChange={(e) => setReduceMotion(e.target.checked)}
-              />
-            </label>
-
+          <div className="text-sm text-slate-400">
+            Light theme is experimental
           </div>
         </Card>
       )}
-
     </div>
   );
 }
