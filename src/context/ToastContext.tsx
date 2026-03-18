@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+} from "react";
 
 export type ToastType = "success" | "error" | "info";
 
@@ -6,43 +14,85 @@ export interface ToastItem {
   id: string;
   type: ToastType;
   message: string;
+  duration?: number;
 }
 
 type ToastContextType = {
-  push: (type: ToastType, message: string) => void;
+  push: (type: ToastType, message: string, duration?: number) => void;
   remove: (id: string) => void;
+  clearAll: () => void;
   toasts: ToastItem[];
 };
 
 const ToastContext = createContext<ToastContextType | null>(null);
 
-function uid() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+const MAX_TOASTS = 5;
+const DEFAULT_DURATION = 3500;
+
+function generateId() {
+  return crypto.randomUUID();
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const timers = useRef<Map<string, number>>(new Map());
 
-  const remove = (id: string) => {
+  const remove = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
 
-  const push = (type: ToastType, message: string) => {
-    const id = uid();
-    const item: ToastItem = { id, type, message };
-    setToasts((prev) => [item, ...prev]);
+    const timer = timers.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timers.current.delete(id);
+    }
+  }, []);
 
-    // auto dismiss
-    window.setTimeout(() => remove(id), 3500);
-  };
+  const push = useCallback(
+    (type: ToastType, message: string, duration = DEFAULT_DURATION) => {
+      // 🔥 Prevent duplicate toasts
+      setToasts((prev) => {
+        const exists = prev.find((t) => t.message === message && t.type === type);
+        if (exists) return prev;
+
+        const id = generateId();
+        const newToast: ToastItem = { id, type, message, duration };
+
+        const next = [newToast, ...prev].slice(0, MAX_TOASTS);
+
+        const timer = window.setTimeout(() => {
+          remove(id);
+        }, duration);
+
+        timers.current.set(id, timer);
+
+        return next;
+      });
+    },
+    [remove]
+  );
+
+  const clearAll = useCallback(() => {
+    timers.current.forEach((timer) => clearTimeout(timer));
+    timers.current.clear();
+    setToasts([]);
+  }, []);
+
+  // 🔥 Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      timers.current.forEach((timer) => clearTimeout(timer));
+      timers.current.clear();
+    };
+  }, []);
 
   const value = useMemo(
     () => ({
       push,
       remove,
+      clearAll,
       toasts,
     }),
-    [toasts]
+    [push, remove, clearAll, toasts]
   );
 
   return (
@@ -55,7 +105,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={t.id}
             className={[
-              "min-w-[260px] max-w-[340px] rounded-2xl border px-4 py-3 text-sm shadow-lg",
+              "min-w-[260px] max-w-[340px] rounded-2xl border px-4 py-3 text-sm shadow-lg backdrop-blur",
               t.type === "success"
                 ? "border-green-500/30 bg-green-500/10 text-green-200"
                 : t.type === "error"
@@ -71,6 +121,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   ? "Error"
                   : "Info"}
               </div>
+
               <button
                 onClick={() => remove(t.id)}
                 className="text-slate-300 hover:text-white"
@@ -79,6 +130,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 ✕
               </button>
             </div>
+
             <div className="mt-1 text-slate-200/90">{t.message}</div>
           </div>
         ))}

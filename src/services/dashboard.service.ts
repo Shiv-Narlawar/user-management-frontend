@@ -1,4 +1,4 @@
-import { apiFetch } from "../lib/api";
+import { apiFetch } from "../lib/apiFetch";
 
 export interface DashboardStats {
   totalUsers: number;
@@ -9,7 +9,7 @@ export interface DashboardStats {
   users: number;
 }
 
+// stats
 export async function fetchDashboardStats(): Promise<DashboardStats> {
-  const result = await apiFetch("/dashboard/stats");
-  return result as DashboardStats;
+  return await apiFetch<DashboardStats>("/dashboard/stats");
 }

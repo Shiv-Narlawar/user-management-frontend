@@ -6,10 +6,6 @@ import { useAuth } from "./context/AuthContext";
 
 import Landing from "./pages/auth/Landing";
 import Login from "./pages/auth/Login";
-import Signup from "./pages/auth/Signup";
-import ForgotPassword from "./pages/auth/ForgotPassword";
-import ResetPassword from "./pages/auth/ResetPassword";
-import UpdatePassword from "./pages/auth/UpdatePassword";
 
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
@@ -19,67 +15,63 @@ import Audit from "./pages/admin/Audit";
 import SettingsPage from "./pages/Settings";
 import Departments from "./pages/admin/Departments";
 
-// manager page
+// manager
 import MyDepartment from "./pages/manager/MyDepartment";
 
 export default function App() {
-
   const { user, loading } = useAuth();
 
+  // loading
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen text-slate-400">
-        Loading session...
+        loading...
       </div>
     );
   }
 
   return (
     <Routes>
-
-      {/* ---------- PUBLIC ROUTES ---------- */}
+      {/* public */}
 
       <Route
-  path="/"
-  element={
-    user ? (
-      user.role === "ADMIN"
-        ? <Navigate to="/app/dashboard" replace />
-        : user.role === "MANAGER"
-        ? <Navigate to="/app/my-department" replace />
-        : <Navigate to="/app/users" replace />
-    ) : (
-      <Landing />
-    )
-  }
-/>
+        path="/"
+        element={
+          user ? (
+            user.role === "ADMIN" ? (
+              <Navigate to="/app/dashboard" replace />
+            ) : user.role === "MANAGER" ? (
+              <Navigate to="/app/my-department" replace />
+            ) : (
+              <Navigate to="/app/users" replace />
+            )
+          ) : (
+            <Landing />
+          )
+        }
+      />
 
       <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/update-password" element={<UpdatePassword />} />
 
-      {/* ---------- PROTECTED ROUTES ---------- */}
+      {/* protected */}
 
       <Route element={<RequireAuth />}>
 
         <Route path="/app" element={<AppShell />}>
-
-          {/* redirect /app -> dashboard */}
+          {/* redirect */}
           <Route index element={<Navigate to="dashboard" replace />} />
 
-          {/* ---------- COMMON ---------- */}
+          {/* common */}
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="users" element={<Users />} />
           <Route path="settings" element={<SettingsPage />} />
 
-          {/* ---------- MANAGER ---------- */}
+          {/* manager */}
           <Route element={<RequireRole role="MANAGER" />}>
             <Route path="my-department" element={<MyDepartment />} />
           </Route>
 
-          {/* ---------- ADMIN ---------- */}
+          {/* admin */}
           <Route element={<RequireRole role="ADMIN" />}>
             <Route path="roles" element={<Roles />} />
             <Route path="permissions" element={<Permissions />} />
@@ -87,16 +79,14 @@ export default function App() {
             <Route path="audit" element={<Audit />} />
           </Route>
 
-          {/* fallback inside /app */}
+          {/* fallback */}
           <Route path="*" element={<Navigate to="dashboard" replace />} />
-
         </Route>
 
       </Route>
 
-      {/* ---------- GLOBAL FALLBACK ---------- */}
+      {/* global*/}
       <Route path="*" element={<Navigate to="/" replace />} />
-
     </Routes>
   );
 }
