@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useDebounce } from "../hooks/useDebounce";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -10,6 +11,7 @@ import type { UserRow } from "../services/users.api";
 
 import {
   useDeleteUserMutation,
+  useInviteUserMutation,
   useUpdateUserStatusMutation,
   useUsersQuery,
 } from "../hooks/queries/useUsers";
@@ -25,6 +27,7 @@ type DepartmentOption = {
 
 export default function Users() {
   const { user } = useAuth();
+  const { push } = useToast();
 
   const role: Role = user?.role ?? "USER";
 
@@ -33,6 +36,8 @@ export default function Users() {
 
   const allowUpdate = isAdmin || isManager;
   const allowDelete = isAdmin;
+  const allowInvite =
+    isAdmin || Boolean(user?.permissions?.includes("USER_INVITE"));
 
   const [q, setQ] = useState("");
   const dq = useDebounce(q, 400);
@@ -54,6 +59,7 @@ export default function Users() {
 
   const updateUser = useUpdateUserStatusMutation();
   const delUser = useDeleteUserMutation();
+  const inviteUser = useInviteUserMutation();
 
   const rows = usersQuery.data?.data ?? [];
   const total = usersQuery.data?.total ?? 0;
@@ -68,10 +74,28 @@ export default function Users() {
   const [editStatus, setEditStatus] = useState<Status>("ACTIVE");
   const [editDepartmentId, setEditDepartmentId] = useState("");
   const [editRole, setEditRole] = useState<Role>("USER");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<Exclude<Role, "ADMIN">>("USER");
 
   const selectedDepartmentName =
     departments.find((d) => d.id === editDepartmentId)?.name ||
     "Unassigned";
+
+  const submitInvite = async () => {
+    if (!allowInvite) return;
+
+    await inviteUser.mutateAsync({
+      name: inviteName.trim(),
+      email: inviteEmail.trim(),
+      role: inviteRole,
+    });
+
+    setInviteName("");
+    setInviteEmail("");
+    setInviteRole("USER");
+    push("success", "Invitation email sent successfully.");
+  };
 
   function openEdit(u: UserRow) {
     setEditing(u);
@@ -149,6 +173,9 @@ export default function Users() {
     (usersQuery.isError
       ? (usersQuery.error as Error | null)?.message
       : null) ||
+    (inviteUser.isError
+      ? (inviteUser.error as Error | null)?.message
+      : null) ||
     (updateUser.isError
       ? (updateUser.error as Error | null)?.message
       : null) ||
@@ -218,6 +245,59 @@ export default function Users() {
         </div>
       </Card>
 
+      {allowInvite && (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="text-xl font-bold text-slate-100">
+                Invite User
+              </div>
+              <div className="mt-1 text-sm text-slate-400">
+                Create the user in the system and let Auth0 send the signup
+                link.
+              </div>
+            </div>
+
+            <div className="grid w-full gap-3 md:grid-cols-[1.2fr_1.4fr_180px_auto]">
+              <Input
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                placeholder="Full name"
+              />
+
+              <Input
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="Email address"
+                type="email"
+              />
+
+              <select
+                value={inviteRole}
+                onChange={(e) =>
+                  setInviteRole(e.target.value as Exclude<Role, "ADMIN">)
+                }
+                className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+              >
+                <option value="USER">USER</option>
+                <option value="MANAGER">MANAGER</option>
+              </select>
+
+              <Button
+                onClick={submitInvite}
+                disabled={
+                  inviteUser.isPending ||
+                  !inviteName.trim() ||
+                  !inviteEmail.trim()
+                }
+              >
+                {inviteUser.isPending ? "Sending..." : "Send Invite"}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {errorMessage && (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-300">
           {errorMessage}
@@ -276,6 +356,8 @@ export default function Users() {
                         className={
                           u.status === "ACTIVE"
                             ? "rounded-xl border border-green-600/30 bg-green-600/20 px-2 py-1 text-xs text-green-400"
+                            : u.status === "INVITED"
+                            ? "rounded-xl border border-amber-600/30 bg-amber-600/20 px-2 py-1 text-xs text-amber-300"
                             : "rounded-xl border border-red-600/30 bg-red-600/20 px-2 py-1 text-xs text-red-400"
                         }
                       >
@@ -374,6 +456,7 @@ export default function Users() {
                   }
                   className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
                 >
+                  <option value="INVITED">INVITED</option>
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="INACTIVE">INACTIVE</option>
                 </select>

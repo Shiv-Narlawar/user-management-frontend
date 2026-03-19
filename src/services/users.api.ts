@@ -23,6 +23,12 @@ export interface UsersResponse {
   totalPages: number;
 }
 
+export interface InviteUserPayload {
+  name: string;
+  email: string;
+  role: Exclude<Role, "ADMIN">;
+}
+
 export async function getUsers(params: {
   search?: string;
   role?: Role;
@@ -84,5 +90,14 @@ export async function updateUserStatus(payload: {
 export async function deleteUser(id: string): Promise<void> {
   await apiFetch<void>(`/users/${id}`, {
     method: "DELETE",
+  });
+}
+
+export async function inviteUser(
+  payload: InviteUserPayload
+): Promise<{ message: string; user: UserRow }> {
+  return apiFetch<{ message: string; user: UserRow }>("/users/invite", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }

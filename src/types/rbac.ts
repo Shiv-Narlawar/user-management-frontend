@@ -2,7 +2,7 @@ export type Role = "ADMIN" | "MANAGER" | "USER";
 
 export const ROLES: Role[] = ["ADMIN", "MANAGER", "USER"];
 
-export type Status = "ACTIVE" | "INACTIVE";
+export type Status = "ACTIVE" | "INACTIVE" | "INVITED";
 
 export interface UserRow {
   id: string;

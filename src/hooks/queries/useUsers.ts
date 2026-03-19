@@ -12,6 +12,7 @@ import type { UsersResponse } from "../../services/users.api";
 import {
   deleteUser,
   getUsers,
+  inviteUser,
   updateUserStatus,
 } from "../../services/users.api";
 
@@ -114,6 +115,18 @@ export function useDeleteUserMutation() {
   return useMutation({
     mutationFn: (id: string) => deleteUser(id),
 
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: qk.dashboardStats() });
+    },
+  });
+}
+
+export function useInviteUserMutation() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: inviteUser,
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
       qc.invalidateQueries({ queryKey: qk.dashboardStats() });
