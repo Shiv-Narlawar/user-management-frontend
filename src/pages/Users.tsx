@@ -42,6 +42,12 @@ export default function Users() {
   const [sortOrder, setSortOrder] = useState<"ASC" | "DESC">("DESC");
   const [roleFilter, setRoleFilter] = useState<Role | "ALL">("ALL");
 
+  // INVITE
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<Role>("USER");
+
   const usersQuery = useUsersQuery({
     search: dq ?? "",
     page,
@@ -62,6 +68,7 @@ export default function Users() {
   const departments: DepartmentOption[] =
     departmentsQuery.data?.data ?? [];
 
+  // EDIT
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
 
@@ -73,6 +80,29 @@ export default function Users() {
     departments.find((d) => d.id === editDepartmentId)?.name ||
     "Unassigned";
 
+  const handleInvite = async () => {
+    try {
+      await fetch("/api/users/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: inviteName,
+          email: inviteEmail,
+          role: inviteRole,
+        }),
+      });
+
+      setInviteOpen(false);
+      setInviteName("");
+      setInviteEmail("");
+      usersQuery.refetch();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   function openEdit(u: UserRow) {
     setEditing(u);
     setEditStatus(u.status ?? "ACTIVE");
@@ -82,13 +112,8 @@ export default function Users() {
   }
 
   function closeEdit() {
-    if (updateUser.isPending) return;
-
     setEditOpen(false);
     setEditing(null);
-    setEditDepartmentId("");
-    setEditStatus("ACTIVE");
-    setEditRole("USER");
   }
 
   const saveEdit = async () => {
@@ -110,21 +135,14 @@ export default function Users() {
     }
 
     await updateUser.mutateAsync(payload);
-
     closeEdit();
   };
 
   const onDelete = async (id: string) => {
     if (!allowDelete) return;
-
-    const ok = window.confirm("Soft delete this user?");
-    if (!ok) return;
+    if (!window.confirm("Soft delete this user?")) return;
 
     await delUser.mutateAsync(id);
-
-    if (rows.length === 1 && page > 1) {
-      setPage((p) => p - 1);
-    }
   };
 
   const start = useMemo(
@@ -137,44 +155,21 @@ export default function Users() {
     [page, total]
   );
 
-  const title =
-    role === "USER" ? "Department Directory" : "Users";
-
-  const subtitle =
-    role === "USER"
-      ? "You can only view users in your department."
-      : `Showing ${start} – ${end} of ${total}`;
-
-  const errorMessage =
-    (usersQuery.isError
-      ? (usersQuery.error as Error | null)?.message
-      : null) ||
-    (updateUser.isError
-      ? (updateUser.error as Error | null)?.message
-      : null) ||
-    (delUser.isError
-      ? (delUser.error as Error | null)?.message
-      : null) ||
-    null;
-
   return (
     <div className="space-y-5">
 
       {/* HEADER */}
       <Card className="p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap justify-between gap-4">
 
           <div>
-            <div className="text-3xl font-extrabold text-slate-100">
-              {title}
-            </div>
-
-            <div className="mt-1 text-sm text-slate-400">
-              {subtitle}
+            <div className="text-2xl font-bold">Users</div>
+            <div className="text-sm text-gray-400">
+              Showing {start} - {end} of {total}
             </div>
           </div>
 
-          <div className="flex gap-3 w-full md:w-auto">
+          <div className="flex gap-3">
 
             <Input
               value={q}
@@ -182,35 +177,34 @@ export default function Users() {
                 setQ(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search name or email..."
-              className="w-full md:w-72"
+              placeholder="Search..."
             />
 
             {isAdmin && (
               <>
+                <Button onClick={() => setInviteOpen((p) => !p)}>
+                  Invite
+                </Button>
+
                 <select
                   value={roleFilter}
-                  onChange={(e) => {
-                    setRoleFilter(e.target.value as Role | "ALL");
-                    setPage(1);
-                  }}
-                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                  onChange={(e) =>
+                    setRoleFilter(e.target.value as Role | "ALL")
+                  }
                 >
-                  <option value="ALL">All Roles</option>
-                  <option value="USER">Users</option>
-                  <option value="MANAGER">Managers</option>
+                  <option value="ALL">All</option>
+                  <option value="USER">USER</option>
+                  <option value="MANAGER">MANAGER</option>
                 </select>
 
                 <select
                   value={sortOrder}
-                  onChange={(e) => {
-                    setSortOrder(e.target.value as "ASC" | "DESC");
-                    setPage(1);
-                  }}
-                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                  onChange={(e) =>
+                    setSortOrder(e.target.value as "ASC" | "DESC")
+                  }
                 >
-                  <option value="DESC">Newest First</option>
-                  <option value="ASC">Oldest First</option>
+                  <option value="DESC">Newest</option>
+                  <option value="ASC">Oldest</option>
                 </select>
               </>
             )}
@@ -218,234 +212,129 @@ export default function Users() {
         </div>
       </Card>
 
-      {errorMessage && (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-300">
-          {errorMessage}
-        </div>
+      {/* INVITE */}
+      {isAdmin && inviteOpen && (
+        <Card className="p-4 flex gap-3">
+          <Input
+            placeholder="Name"
+            value={inviteName}
+            onChange={(e) => setInviteName(e.target.value)}
+          />
+          <Input
+            placeholder="Email"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+          />
+          <select
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value as Role)}
+          >
+            <option value="USER">USER</option>
+            <option value="MANAGER">MANAGER</option>
+          </select>
+          <Button onClick={handleInvite}>Send</Button>
+        </Card>
       )}
 
       {/* TABLE */}
-      <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
-
-            <thead className="border-b border-slate-800 bg-slate-950/40">
-              <tr className="text-slate-300">
-                <th className="px-6 py-3 text-left">Name</th>
-                <th className="px-6 py-3 text-left">Email</th>
-                <th className="px-6 py-3 text-left">Role</th>
-                <th className="px-6 py-3 text-left">Status</th>
-                <th className="px-6 py-3 text-left">Department</th>
-                <th className="px-6 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {usersQuery.isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
-                    Loading users...
-                  </td>
-                </tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
-                    No users found.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((u) => (
-                  <tr
-                    key={u.id}
-                    className="border-b border-slate-800 hover:bg-slate-900/25"
+      <Card className="p-4">
+        <table className="w-full">
+          <tbody>
+            {rows.map((u) => (
+              <tr key={u.id}>
+                <td>{u.name}</td>
+                <td>{u.email}</td>
+                <td>{u.roleName}</td>
+                <td>
+                  {u.status === "ACTIVE"
+                    ? "🟢"
+                    : u.status === "INVITED"
+                    ? "🟡"
+                    : "🔴"}
+                </td>
+                <td>{u.department?.name ?? "Unassigned"}</td>
+                <td>
+                  <Button
+                    disabled={!allowUpdate || u.id === user?.id}
+                    onClick={() => openEdit(u)}
                   >
-                    <td className="px-6 py-4 font-semibold text-slate-100">
-                      {u.name}
-                    </td>
+                    Edit
+                  </Button>
 
-                    <td className="px-6 py-4 text-slate-300">
-                      {u.email}
-                    </td>
-
-                    <td className="px-6 py-4 text-slate-200">
-                      {u.roleName}
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span
-                        className={
-                          u.status === "ACTIVE"
-                            ? "rounded-xl border border-green-600/30 bg-green-600/20 px-2 py-1 text-xs text-green-400"
-                            : "rounded-xl border border-red-600/30 bg-red-600/20 px-2 py-1 text-xs text-red-400"
-                        }
-                      >
-                        {u.status}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4 text-slate-300">
-                      {u.department?.name ?? "Unassigned"}
-                    </td>
-
-                    <td className="space-x-2 px-6 py-4 text-right">
-
-                      <Button
-                        variant="ghost"
-                        disabled={!allowUpdate}
-                        onClick={() => openEdit(u)}
-                      >
-                        Edit
-                      </Button>
-
-                      {allowDelete && (
-                        <Button
-                          variant="danger"
-                          disabled={u.id === user?.id}
-                          onClick={() => onDelete(u.id)}
-                        >
-                          Delete
-                        </Button>
-                      )}
-
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-
-          </table>
-        </div>
+                  {allowDelete && (
+                    <Button
+                      disabled={u.id === user?.id}
+                      onClick={() => onDelete(u.id)}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </Card>
 
       {/* PAGINATION */}
       {totalPages > 1 && (
-        <div className="flex justify-center gap-3">
-
-          <Button
-            disabled={page === 1}
-            onClick={() => setPage((p) => p - 1)}
-          >
-            Previous
-          </Button>
-
-          <div className="flex items-center text-sm text-slate-300">
-            Page {page} of {totalPages}
-          </div>
-
-          <Button
-            disabled={page === totalPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </Button>
-
+        <div className="flex gap-3 justify-center">
+          <Button onClick={() => setPage((p) => p - 1)}>Prev</Button>
+          <div>{page} / {totalPages}</div>
+          <Button onClick={() => setPage((p) => p + 1)}>Next</Button>
         </div>
       )}
 
       {/* EDIT MODAL */}
       {editOpen && editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center">
+          <Card className="p-6 w-[400px]">
 
-          <Card className="w-full max-w-md p-6">
+            <div className="mb-3 font-bold">Edit User</div>
 
-            <div className="text-lg font-bold mb-4">
-              Edit User
-            </div>
+            <select
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value as Status)}
+            >
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="INACTIVE">INACTIVE</option>
+            </select>
 
-            <div className="space-y-4">
-
-              <div>
-                <div className="text-sm text-slate-400">Name</div>
-                <div className="text-slate-100">{editing.name}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-slate-400">Email</div>
-                <div className="text-slate-100">{editing.email}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-slate-400 mb-1">Status</div>
+            {isAdmin && (
+              <>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as Role)}
+                >
+                  <option value="USER">USER</option>
+                  <option value="MANAGER">MANAGER</option>
+                </select>
 
                 <select
-                  value={editStatus}
-                  onChange={(e) =>
-                    setEditStatus(e.target.value as Status)
-                  }
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                  value={editDepartmentId}
+                  onChange={(e) => setEditDepartmentId(e.target.value)}
                 >
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="INACTIVE">INACTIVE</option>
+                  <option value="">Unassigned</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
                 </select>
-              </div>
 
-              {isAdmin && (
-                <>
-                  <div>
-                    <div className="text-sm text-slate-400 mb-1">
-                      Role
-                    </div>
+                <div>Selected: {selectedDepartmentName}</div>
+              </>
+            )}
 
-                    <select
-                      value={editRole}
-                      onChange={(e) =>
-                        setEditRole(e.target.value as Role)
-                      }
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                    >
-                      <option value="USER">USER</option>
-                      <option value="MANAGER">MANAGER</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-slate-400 mb-1">
-                      Department
-                    </div>
-
-                    <select
-                      value={editDepartmentId}
-                      onChange={(e) =>
-                        setEditDepartmentId(e.target.value)
-                      }
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
-                    >
-                      <option value="">Unassigned</option>
-
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                    </select>
-
-                    <div className="text-xs text-slate-400 mt-1">
-                      Selected: {selectedDepartmentName}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-
-              <Button variant="ghost" onClick={closeEdit}>
-                Cancel
-              </Button>
-
-              <Button
-                onClick={saveEdit}
-                disabled={updateUser.isPending}
-              >
-                {updateUser.isPending ? "Saving..." : "Save"}
-              </Button>
-
+            <div className="flex gap-2 mt-4">
+              <Button onClick={closeEdit}>Cancel</Button>
+              <Button onClick={saveEdit}>Save</Button>
             </div>
 
           </Card>
-
         </div>
       )}
+
     </div>
   );
 }
