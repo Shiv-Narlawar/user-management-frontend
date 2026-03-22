@@ -62,7 +62,7 @@ export function useUpdateUserStatusMutation() {
     mutationFn: (payload: {
       id: string;
       status: Status;
-      departmentId?: string;
+      departmentId?: string | null;
       roleName?: Role;
     }) => updateUserStatus(payload),
 
@@ -101,6 +101,7 @@ export function useUpdateUserStatusMutation() {
 
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: qk.departments() });
       qc.invalidateQueries({ queryKey: qk.dashboardStats() });
     },
   });

@@ -31,7 +31,7 @@ function getStatusLabel(u: AuthUser | null): string {
 }
 
 export default function SettingsPage() {
-  const { user, patchUserLocal } = useAuth();
+  const { user, patchUserLocal, signOut } = useAuth();
   const { push } = useToast();
 
   const roleLabel = getRoleLabel(user);
@@ -77,7 +77,7 @@ export default function SettingsPage() {
   // auth0 reset
   async function handleChangePassword() {
     try {
-      await fetch(
+      const response = await fetch(
         `https://${import.meta.env.VITE_AUTH0_DOMAIN}/dbconnections/change_password`,
         {
           method: "POST",
@@ -90,7 +90,14 @@ export default function SettingsPage() {
         }
       );
 
-      push("success", "Password reset email sent");
+      if (!response.ok) {
+        throw new Error("Failed to send reset email");
+      }
+
+      push("success", "Password reset email sent. Please sign in again after updating your password.");
+      setTimeout(() => {
+        void signOut();
+      }, 1200);
     } catch {
       push("error", "Failed to send reset email");
     }

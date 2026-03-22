@@ -23,6 +23,12 @@ type DepartmentOption = {
   name: string;
 };
 
+type UsersResponse = {
+  data: UserRow[];
+  total: number;
+  totalPages: number;
+};
+
 export default function Users() {
   const { user } = useAuth();
 
@@ -33,6 +39,8 @@ export default function Users() {
 
   const allowUpdate = isAdmin || isManager;
   const allowDelete = isAdmin;
+
+  const isSelf = (id: string) => id === user?.id;
 
   const [q, setQ] = useState("");
   const dq = useDebounce(q, 400);
@@ -55,9 +63,11 @@ export default function Users() {
   const updateUser = useUpdateUserStatusMutation();
   const delUser = useDeleteUserMutation();
 
-  const rows = usersQuery.data?.data ?? [];
-  const total = usersQuery.data?.total ?? 0;
-  const totalPages = usersQuery.data?.totalPages ?? 1;
+  const data = usersQuery.data as UsersResponse | undefined;
+
+  const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
   const departments: DepartmentOption[] =
     departmentsQuery.data?.data ?? [];
@@ -94,10 +104,12 @@ export default function Users() {
   const saveEdit = async () => {
     if (!allowUpdate || !editing) return;
 
+    if (isAdmin && editing.id === user?.id) return;
+
     const payload: {
       id: string;
       status: Status;
-      departmentId?: string;
+      departmentId?: string | null;
       roleName?: Role;
     } = {
       id: editing.id,
@@ -105,17 +117,18 @@ export default function Users() {
     };
 
     if (isAdmin) {
-      payload.departmentId = editDepartmentId || undefined;
       payload.roleName = editRole;
+      payload.departmentId = editDepartmentId || null;
     }
 
     await updateUser.mutateAsync(payload);
-
     closeEdit();
   };
 
   const onDelete = async (id: string) => {
     if (!allowDelete) return;
+
+    if (isAdmin && isSelf(id)) return;
 
     const ok = window.confirm("Soft delete this user?");
     if (!ok) return;
@@ -157,25 +170,23 @@ export default function Users() {
       : null) ||
     null;
 
+  const isEditingSelf = editing?.id === user?.id;
+
   return (
     <div className="space-y-5">
-
       {/* HEADER */}
       <Card className="p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
-
           <div>
             <div className="text-3xl font-extrabold text-slate-100">
               {title}
             </div>
-
             <div className="mt-1 text-sm text-slate-400">
               {subtitle}
             </div>
           </div>
 
           <div className="flex gap-3 w-full md:w-auto">
-
             <Input
               value={q}
               onChange={(e) => {
@@ -228,7 +239,6 @@ export default function Users() {
       <Card className="overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
-
             <thead className="border-b border-slate-800 bg-slate-950/40">
               <tr className="text-slate-300">
                 <th className="px-6 py-3 text-left">Name</th>
@@ -257,10 +267,15 @@ export default function Users() {
                 rows.map((u) => (
                   <tr
                     key={u.id}
-                    className="border-b border-slate-800 hover:bg-slate-900/25"
+                    className={`border-b border-slate-800 hover:bg-slate-900/25 ${
+                      isSelf(u.id) ? "bg-slate-800/40" : ""
+                    }`}
                   >
                     <td className="px-6 py-4 font-semibold text-slate-100">
                       {u.name}
+                      {isSelf(u.id) && (
+                        <span className="ml-2 text-xs text-slate-400">(You)</span>
+                      )}
                     </td>
 
                     <td className="px-6 py-4 text-slate-300">
@@ -273,11 +288,11 @@ export default function Users() {
 
                     <td className="px-6 py-4">
                       <span
-                        className={
+                        className={`px-2 py-1 text-xs rounded-xl ${
                           u.status === "ACTIVE"
-                            ? "rounded-xl border border-green-600/30 bg-green-600/20 px-2 py-1 text-xs text-green-400"
-                            : "rounded-xl border border-red-600/30 bg-red-600/20 px-2 py-1 text-xs text-red-400"
-                        }
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-red-500/20 text-red-400"
+                        }`}
                       >
                         {u.status}
                       </span>
@@ -288,10 +303,9 @@ export default function Users() {
                     </td>
 
                     <td className="space-x-2 px-6 py-4 text-right">
-
                       <Button
                         variant="ghost"
-                        disabled={!allowUpdate}
+                        disabled={!allowUpdate || (isAdmin && isSelf(u.id))}
                         onClick={() => openEdit(u)}
                       >
                         Edit
@@ -300,19 +314,17 @@ export default function Users() {
                       {allowDelete && (
                         <Button
                           variant="danger"
-                          disabled={u.id === user?.id}
+                          disabled={isAdmin && isSelf(u.id)}
                           onClick={() => onDelete(u.id)}
                         >
                           Delete
                         </Button>
                       )}
-
                     </td>
                   </tr>
                 ))
               )}
             </tbody>
-
           </table>
         </div>
       </Card>
@@ -320,7 +332,6 @@ export default function Users() {
       {/* PAGINATION */}
       {totalPages > 1 && (
         <div className="flex justify-center gap-3">
-
           <Button
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}
@@ -338,22 +349,24 @@ export default function Users() {
           >
             Next
           </Button>
-
         </div>
       )}
 
       {/* EDIT MODAL */}
       {editOpen && editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-
           <Card className="w-full max-w-md p-6">
-
             <div className="text-lg font-bold mb-4">
               Edit User
             </div>
 
-            <div className="space-y-4">
+            {isAdmin && isEditingSelf && (
+              <div className="text-xs text-yellow-400 mb-2">
+                You cannot modify your own account.
+              </div>
+            )}
 
+            <div className="space-y-4">
               <div>
                 <div className="text-sm text-slate-400">Name</div>
                 <div className="text-slate-100">{editing.name}</div>
@@ -366,9 +379,9 @@ export default function Users() {
 
               <div>
                 <div className="text-sm text-slate-400 mb-1">Status</div>
-
                 <select
                   value={editStatus}
+                  disabled={isAdmin && isEditingSelf}
                   onChange={(e) =>
                     setEditStatus(e.target.value as Status)
                   }
@@ -388,6 +401,7 @@ export default function Users() {
 
                     <select
                       value={editRole}
+                      disabled={isAdmin && isEditingSelf}
                       onChange={(e) =>
                         setEditRole(e.target.value as Role)
                       }
@@ -405,6 +419,7 @@ export default function Users() {
 
                     <select
                       value={editDepartmentId}
+                      disabled={isAdmin && isEditingSelf}
                       onChange={(e) =>
                         setEditDepartmentId(e.target.value)
                       }
@@ -428,7 +443,6 @@ export default function Users() {
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
-
               <Button variant="ghost" onClick={closeEdit}>
                 Cancel
               </Button>
@@ -439,11 +453,8 @@ export default function Users() {
               >
                 {updateUser.isPending ? "Saving..." : "Save"}
               </Button>
-
             </div>
-
           </Card>
-
         </div>
       )}
     </div>
