@@ -11,14 +11,15 @@ export default function LoginPage() {
   const handleLogin = async () => {
     try {
       await loginWithRedirect({
-        authorizationParams: {
-          audience: import.meta.env.VITE_AUTH0_AUDIENCE,
-          redirect_uri: window.location.origin,
-        },
-        appState: {
-          returnTo: "/app",
-        },
-      });
+  authorizationParams: {
+    audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+    redirect_uri: window.location.origin,
+    prompt: "login",
+  },
+  appState: {
+    returnTo: "/app",
+  },
+});
     } catch {
       push("error", "login failed");
     }

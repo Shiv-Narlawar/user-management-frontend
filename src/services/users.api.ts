@@ -68,7 +68,7 @@ export async function getAssignableUsers(): Promise<UserRow[]> {
 export async function updateUserStatus(payload: {
   id: string;
   status: Status;
-  departmentId?: string;
+  departmentId?: string | null;
   roleName?: Role;
 }): Promise<void> {
   await apiFetch<void>(`/users/${payload.id}`, {

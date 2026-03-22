@@ -23,11 +23,11 @@ function isDefaultRole(name: string) {
 function validateRoleName(name: string): string | null {
   const trimmed = name.trim();
 
-  if (!trimmed) return "Role name is required";
-  if (trimmed.length > 32) return "Role name must be ≤ 32 characters";
+  if (!trimmed) return null;
+  if (trimmed.length > 32) return "Role name must be 32 characters or fewer";
 
   const ok = /^[A-Z][A-Z0-9_]*$/.test(trimmed);
-  if (!ok) return "Use uppercase format like SUPPORT_AGENT";
+  if (!ok) return "Use uppercase format such as SUPPORT_AGENT";
 
   return null;
 }
@@ -70,7 +70,7 @@ export default function Roles() {
       const list = Array.isArray(res) ? res : res.data ?? [];
 
       const map = new Map<string, number>();
-      list.forEach((r) => map.set(String(r.id), Number(r.userCount ?? 0)));
+      list.forEach((role) => map.set(String(role.id), Number(role.userCount ?? 0)));
       setUserCounts(map);
     } catch {
       setUserCounts(new Map());
@@ -88,7 +88,7 @@ export default function Roles() {
     const query = dq.trim().toLowerCase();
     if (!query) return roles;
 
-    return roles.filter((r) => r.name.toLowerCase().includes(query));
+    return roles.filter((role) => role.name.toLowerCase().includes(query));
   }, [roles, dq]);
 
   const sortedRoles = useMemo(() => {
@@ -103,7 +103,10 @@ export default function Roles() {
     });
   }, [filtered]);
 
-  const existingNames = useMemo(() => new Set(roles.map((r) => r.name)), [roles]);
+  const existingNames = useMemo(
+    () => new Set(roles.map((role) => role.name)),
+    [roles]
+  );
 
   const roleError = validateRoleName(name.toUpperCase());
 
@@ -156,7 +159,6 @@ export default function Roles() {
       await apiFetch(`/roles/${roleId}`, { method: "DELETE" });
 
       push("success", "Role deleted");
-
       await Promise.all([load(), loadRoleCounts()]);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Role delete failed";
@@ -165,34 +167,54 @@ export default function Roles() {
   }
 
   const totalRoles = roles.length;
-  const customRoles = roles.filter((r) => !isDefaultRole(r.name)).length;
+  const customRoles = roles.filter((role) => !isDefaultRole(role.name)).length;
+  const defaultRoles = totalRoles - customRoles;
 
   return (
     <div className="space-y-5">
       <Card className="p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="text-blue-300 text-sm font-semibold tracking-widest">
-              ADMIN
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div className="max-w-2xl">
+            <div className="text-sm font-semibold tracking-[0.2em] text-blue-300">
+              ADMINISTRATION
             </div>
 
-            <div className="text-4xl font-extrabold mt-2">Roles</div>
-
-            <div className="text-slate-400 mt-2">
-              Create & manage roles
-              <span className="text-slate-200 font-semibold">Permissions</span>.
+            <div className="mt-2 text-4xl font-extrabold text-slate-100">
+              Roles
             </div>
 
-            <div className="mt-3 text-sm text-slate-400">
-              Total roles:{" "}
-              <span className="text-slate-200 font-semibold">{totalRoles}</span>{" "}
-              • Custom roles:{" "}
-              <span className="text-slate-200 font-semibold">{customRoles}</span>
+            <div className="mt-2 text-slate-400">
+              Maintain the role catalog used for access control. Default roles stay
+              protected, while custom roles can be introduced for specific operational
+              needs.
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/35 px-4 py-2 text-slate-400">
+                Total
+                <span className="ml-2 font-semibold text-slate-200">
+                  {totalRoles}
+                </span>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/35 px-4 py-2 text-slate-400">
+                Default
+                <span className="ml-2 font-semibold text-slate-200">
+                  {defaultRoles}
+                </span>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/35 px-4 py-2 text-slate-400">
+                Custom
+                <span className="ml-2 font-semibold text-slate-200">
+                  {customRoles}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-start gap-3">
               <div>
                 <Input
                   value={name}
@@ -202,17 +224,12 @@ export default function Roles() {
                 />
 
                 {roleError && (
-                  <div className="text-xs text-red-400 mt-1">
-                    {roleError}
-                  </div>
+                  <div className="mt-1 text-xs text-red-400">{roleError}</div>
                 )}
               </div>
 
-              <Button
-                onClick={create}
-                disabled={creating || !!roleError}
-              >
-                {creating ? "Creating…" : "Create"}
+              <Button onClick={create} disabled={creating || !!roleError}>
+                {creating ? "Creating..." : "Create Role"}
               </Button>
             </div>
 
@@ -224,32 +241,30 @@ export default function Roles() {
                 className="w-72"
               />
 
-              <Button
-                variant="ghost"
-                onClick={() => setQ("")}
-                disabled={!q}
-              >
-                Reset
+              <Button variant="ghost" onClick={() => setQ("")} disabled={!q}>
+                Clear
               </Button>
 
               <div className="text-xs text-slate-500">
-                {loadingCounts ? "Loading usage…" : "Usage shown if available"}
+                {loadingCounts
+                  ? "Loading usage..."
+                  : "User assignments shown when available"}
               </div>
             </div>
           </div>
         </div>
 
         <div className="mt-4 rounded-3xl border border-slate-800 bg-slate-900/30 p-4 text-sm text-slate-300">
-          Naming convention:{" "}
-          <span className="font-semibold text-slate-200">
+          Role naming convention:
+          <span className="ml-2 font-semibold text-slate-200">
             UPPERCASE_WITH_UNDERSCORES
           </span>
         </div>
       </Card>
 
-      <Card className="p-0 overflow-hidden">
+      <Card className="overflow-hidden p-0">
         <table className="w-full text-sm">
-          <thead className="bg-slate-950/40 border-b border-slate-800">
+          <thead className="border-b border-slate-800 bg-slate-950/40">
             <tr className="text-slate-300">
               <th className="px-6 py-3 text-left">Role</th>
               <th className="px-6 py-3 text-left">Type</th>
@@ -262,7 +277,7 @@ export default function Roles() {
             {loading ? (
               <tr>
                 <td colSpan={4} className="px-6 py-6 text-slate-400">
-                  Loading roles…
+                  Loading roles...
                 </td>
               </tr>
             ) : sortedRoles.length === 0 ? (
@@ -272,19 +287,21 @@ export default function Roles() {
                 </td>
               </tr>
             ) : (
-              sortedRoles.map((r) => {
-                const defaultRole = isDefaultRole(r.name);
-                const count = userCounts.get(String(r.id));
+              sortedRoles.map((role) => {
+                const defaultRole = isDefaultRole(role.name);
+                const count = userCounts.get(String(role.id));
                 const canDelete =
                   !defaultRole &&
                   !(typeof count === "number" && count > 0);
 
                 return (
                   <tr
-                    key={r.id}
+                    key={role.id}
                     className="border-b border-slate-800 hover:bg-slate-900/25"
                   >
-                    <td className="px-6 py-4 font-semibold">{r.name}</td>
+                    <td className="px-6 py-4 font-semibold text-slate-100">
+                      {role.name}
+                    </td>
 
                     <td className="px-6 py-4">
                       <span
@@ -300,14 +317,14 @@ export default function Roles() {
                     </td>
 
                     <td className="px-6 py-4 text-slate-300">
-                      {typeof count === "number" ? count : "—"}
+                      {typeof count === "number" ? count : "-"}
                     </td>
 
                     <td className="px-6 py-4 text-right">
                       <Button
                         variant="danger"
                         disabled={!canDelete}
-                        onClick={() => remove(String(r.id), r.name)}
+                        onClick={() => remove(String(role.id), role.name)}
                       >
                         Delete
                       </Button>
