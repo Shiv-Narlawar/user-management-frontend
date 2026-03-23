@@ -5,6 +5,7 @@ import { Input } from "../components/ui/Input";
 import { useAuth } from "../context/AuthContext";
 import { updateMyProfile } from "../services/users.service";
 import { useToast } from "../context/ToastContext";
+import { changePassword } from "../services/auth.service";
 import {
   CheckCircle2,
   Loader2,
@@ -76,32 +77,21 @@ export default function SettingsPage() {
 
   // auth0 reset
   async function handleChangePassword() {
-    try {
-      const response = await fetch(
-        `https://${import.meta.env.VITE_AUTH0_DOMAIN}/dbconnections/change_password`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            client_id: import.meta.env.VITE_AUTH0_CLIENT_ID,
-            email,
-            connection: "Username-Password-Authentication",
-          }),
-        }
-      );
+  try {
+    await changePassword(email);
 
-      if (!response.ok) {
-        throw new Error("Failed to send reset email");
-      }
+    push(
+      "success",
+      "Password reset email sent. Please sign in again after updating your password."
+    );
 
-      push("success", "Password reset email sent. Please sign in again after updating your password.");
-      setTimeout(() => {
-        void signOut();
-      }, 1200);
-    } catch {
-      push("error", "Failed to send reset email");
-    }
+    setTimeout(() => {
+      void signOut();
+    }, 1200);
+  } catch {
+    push("error", "Failed to send reset email");
   }
+}
 
   // theme
   const [theme, setTheme] = useState<Theme>(
