@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Building2,
+  Eye,
+  Mail,
   Pencil,
   Plus,
   Trash2,
@@ -12,7 +14,7 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { useAuth } from "../../context/AuthContext";
 import { apiFetch } from "../../lib/api";
-import type { Role } from "../../types/rbac";
+import type { Role, Status } from "../../types/rbac";
 
 interface Department {
   id: string;
@@ -33,10 +35,18 @@ interface UserRow {
   name: string;
   email: string;
   roleName: Role;
+  status?: Status;
   departmentId?: string | null;
 }
 
 type ListResponse<T> = { data: T[] } | T[];
+type UsersResponse = {
+  data: UserRow[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
 
 function toList<T>(res: ListResponse<T>): T[] {
   if (Array.isArray(res)) return res;
@@ -51,7 +61,8 @@ export default function Departments() {
   const isManager = role === "MANAGER";
 
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const [departmentUsers, setDepartmentUsers] = useState<UserRow[]>([]);
+  const [assignableUsers, setAssignableUsers] = useState<UserRow[]>([]);
   const [managers, setManagers] = useState<UserRow[]>([]);
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -63,6 +74,7 @@ export default function Departments() {
   const [assignDept, setAssignDept] = useState<Department | null>(null);
   const [assignManagerDept, setAssignManagerDept] =
     useState<Department | null>(null);
+  const [viewDept, setViewDept] = useState<Department | null>(null);
 
   const [name, setName] = useState("");
   const [editName, setEditName] = useState("");
@@ -75,13 +87,43 @@ export default function Departments() {
 
   async function loadDepartments() {
     try {
-      setLoading(true);
-      setErr(null);
-
       const deptRes = await apiFetch<ListResponse<Department>>("/departments");
       setDepartments(toList(deptRes));
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to load departments");
+    }
+  }
+
+  async function loadAllUsers() {
+    try {
+      const firstPage = await apiFetch<UsersResponse>("/users?page=1&limit=100");
+      const totalPages = firstPage.totalPages ?? 1;
+
+      if (totalPages <= 1) {
+        setDepartmentUsers(firstPage.data ?? []);
+        return;
+      }
+
+      const remainingPages = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+          apiFetch<UsersResponse>(`/users?page=${index + 2}&limit=100`)
+        )
+      );
+
+      setDepartmentUsers([
+        ...(firstPage.data ?? []),
+        ...remainingPages.flatMap((page) => page.data ?? []),
+      ]);
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Failed to load users");
+    }
+  }
+
+  async function refreshPageData() {
+    try {
+      setLoading(true);
+      setErr(null);
+      await Promise.all([loadDepartments(), loadAllUsers()]);
     } finally {
       setLoading(false);
     }
@@ -90,7 +132,7 @@ export default function Departments() {
   async function loadUnassignedUsers() {
     try {
       const userRes = await apiFetch<ListResponse<UserRow>>("/users/unassigned");
-      setUsers(toList(userRes));
+      setAssignableUsers(toList(userRes));
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to load users");
     }
@@ -108,7 +150,7 @@ export default function Departments() {
   }
 
   useEffect(() => {
-    loadDepartments();
+    refreshPageData();
   }, []);
 
   async function createDepartment() {
@@ -130,7 +172,7 @@ export default function Departments() {
 
       setCreateOpen(false);
       setName("");
-      await loadDepartments();
+      await refreshPageData();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to create department");
     } finally {
@@ -159,7 +201,7 @@ export default function Departments() {
 
       setEditDept(null);
       setEditName("");
-      await loadDepartments();
+      await refreshPageData();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to update department");
     } finally {
@@ -179,7 +221,7 @@ export default function Departments() {
         method: "DELETE",
       });
 
-      await loadDepartments();
+      await refreshPageData();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to delete department");
     } finally {
@@ -218,7 +260,7 @@ export default function Departments() {
       setAssignDept(null);
       setAssignUserId("");
       setSearchUser("");
-      await loadDepartments();
+      await refreshPageData();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to assign user");
     } finally {
@@ -243,7 +285,7 @@ export default function Departments() {
       setAssignManagerDept(null);
       setSelectedManagerId("");
       setSearchManager("");
-      await loadDepartments();
+      await refreshPageData();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Failed to assign manager");
     } finally {
@@ -253,14 +295,14 @@ export default function Departments() {
 
   const filteredUsers = useMemo(() => {
     const q = searchUser.trim().toLowerCase();
-    if (!q) return users;
+    if (!q) return assignableUsers;
 
-    return users.filter(
+    return assignableUsers.filter(
       (u) =>
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q)
     );
-  }, [users, searchUser]);
+  }, [assignableUsers, searchUser]);
 
   const filteredManagers = useMemo(() => {
     const q = searchManager.trim().toLowerCase();
@@ -272,6 +314,24 @@ export default function Departments() {
         m.email.toLowerCase().includes(q)
     );
   }, [managers, searchManager]);
+
+  const usersByDepartment = useMemo(() => {
+    return departmentUsers.reduce<Record<string, UserRow[]>>((acc, currentUser) => {
+      if (!currentUser.departmentId) return acc;
+
+      if (!acc[currentUser.departmentId]) {
+        acc[currentUser.departmentId] = [];
+      }
+
+      acc[currentUser.departmentId].push(currentUser);
+      return acc;
+    }, {});
+  }, [departmentUsers]);
+
+  const departmentMembers = useMemo(() => {
+    if (!viewDept) return [];
+    return usersByDepartment[viewDept.id] ?? [];
+  }, [usersByDepartment, viewDept]);
 
   return (
     <div className="space-y-5">
@@ -336,7 +396,16 @@ export default function Departments() {
                   </td>
 
                   <td className="px-6 py-4 text-slate-300">
-                    {d.users?.length ?? 0}
+                    <button
+                      type="button"
+                      onClick={() => setViewDept(d)}
+                      className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-left text-slate-200 transition hover:bg-slate-800"
+                    >
+                      <span className="font-semibold">
+                        {usersByDepartment[d.id]?.length ?? 0}
+                      </span>
+                      <span className="text-xs text-slate-400">members</span>
+                    </button>
                   </td>
 
                   <td className="px-6 py-4 text-slate-300">
@@ -361,6 +430,16 @@ export default function Departments() {
                           disabled={actionLoading}
                         >
                           <UserCog size={16} /> Assign Manager
+                        </Button>
+                      )}
+
+                      {(isAdmin || isManager) && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => setViewDept(d)}
+                          disabled={actionLoading}
+                        >
+                          <Eye size={16} /> View Users
                         </Button>
                       )}
 
@@ -550,6 +629,91 @@ export default function Departments() {
               disabled={!selectedManagerId || actionLoading}
             >
               {actionLoading ? "Assigning..." : "Assign Manager"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      {viewDept && (
+        <Modal
+          title={`${viewDept.name} Users`}
+          onClose={() => setViewDept(null)}
+        >
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+            <div className="text-sm text-slate-400">Department members</div>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <div className="text-2xl font-extrabold text-slate-100">
+                {departmentMembers.length}
+              </div>
+              <div className="text-xs text-slate-500">
+                Users currently assigned
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 max-h-72 space-y-3 overflow-y-auto pr-1">
+            {departmentMembers.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-700 px-4 py-6 text-center text-sm text-slate-400">
+                No users are assigned to this department yet.
+              </div>
+            ) : (
+              departmentMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-slate-100">
+                        {member.name}
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
+                        <Mail size={12} />
+                        {member.email}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-blue-500/15 px-2.5 py-1 text-xs font-medium text-blue-300">
+                        {member.roleName}
+                      </span>
+                      {member.status && (
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                            member.status === "ACTIVE"
+                              ? "bg-emerald-500/15 text-emerald-300"
+                              : "bg-rose-500/15 text-rose-300"
+                          }`}
+                        >
+                          {member.status}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2">
+            {(isAdmin || isManager) && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (!viewDept) return;
+
+                  const selectedDepartment = viewDept;
+                  setViewDept(null);
+                  openAssignUserModal(selectedDepartment);
+                }}
+                disabled={actionLoading}
+              >
+                <Users size={16} /> Assign User
+              </Button>
+            )}
+
+            <Button variant="ghost" onClick={() => setViewDept(null)}>
+              Close
             </Button>
           </div>
         </Modal>
