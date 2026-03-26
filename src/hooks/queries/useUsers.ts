@@ -10,9 +10,14 @@ import { qk } from "../../lib/queryKeys";
 
 import type { UsersResponse } from "../../services/users.api";
 import {
+  createUser,
   deleteUser,
   getUsers,
   updateUserStatus,
+} from "../../services/users.api";
+import type {
+  CreateUserPayload,
+  CreateUserResponse,
 } from "../../services/users.api";
 
 
@@ -98,6 +103,20 @@ export function useUpdateUserStatusMutation() {
         qc.setQueryData(key, data);
       });
     },
+
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: qk.departments() });
+      qc.invalidateQueries({ queryKey: qk.dashboardStats() });
+    },
+  });
+}
+
+export function useCreateUserMutation() {
+  const qc = useQueryClient();
+
+  return useMutation<CreateUserResponse, Error, CreateUserPayload>({
+    mutationFn: (payload) => createUser(payload),
 
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["users"] });

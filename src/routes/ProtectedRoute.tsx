@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import type { Role } from "../types/rbac";
+import LoginPage from "../pages/auth/Login";
 
 interface Props {
   children: React.ReactNode;
@@ -26,7 +27,7 @@ export default function ProtectedRoute({
 
   // no user
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <LoginPage returnTo={window.location.pathname} />;
   }
 
   // admin bypass

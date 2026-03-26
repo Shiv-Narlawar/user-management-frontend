@@ -23,7 +23,6 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   }
 }
 
-
 export async function changePassword(email: string): Promise<void> {
   const domain = import.meta.env.VITE_AUTH0_DOMAIN;
   const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
