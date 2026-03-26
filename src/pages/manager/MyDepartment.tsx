@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Building2, Search, UserMinus, UserPlus } from "lucide-react";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
@@ -32,6 +33,7 @@ function norm(s: string) {
 
 export default function MyDepartment() {
   const { user } = useAuth();
+  const { push } = useToast();
 
   const [department, setDepartment] = useState<Department | null>(null);
   const [deptUsers, setDeptUsers] = useState<UserRow[]>([]);
@@ -73,6 +75,7 @@ export default function MyDepartment() {
 
     } catch (err) {
       console.error("Failed loading department", err);
+      push("error", "Failed to load department");
       setDepartment(null);
       setDeptUsers([]);
       setUnassignedUsers([]);
@@ -145,8 +148,10 @@ export default function MyDepartment() {
       });
 
       await fetchData();
+      push("success", "User assigned to department");
     } catch (err) {
       console.error("Assign failed", err);
+      push("error", err instanceof Error ? err.message : "Failed to assign user");
     } finally {
       setBusyId(null);
     }
@@ -164,8 +169,10 @@ export default function MyDepartment() {
       });
 
       await fetchData();
+      push("success", "User removed from department");
     } catch (err) {
       console.error("Remove failed", err);
+      push("error", err instanceof Error ? err.message : "Failed to remove user");
     } finally {
       setBusyId(null);
     }

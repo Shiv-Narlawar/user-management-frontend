@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useDebounce } from "../hooks/useDebounce";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -41,6 +42,7 @@ type InvitationResult = {
 
 export default function Users() {
   const { user } = useAuth();
+  const { push } = useToast();
 
   const role: Role = user?.role ?? "USER";
 
@@ -171,8 +173,15 @@ export default function Users() {
       payload.departmentId = editDepartmentId || null;
     }
 
-    await updateUser.mutateAsync(payload);
-    closeEdit();
+    try {
+      await updateUser.mutateAsync(payload);
+      push("success", "User updated");
+      closeEdit();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to update user";
+      push("error", message);
+    }
   };
 
   const onDelete = async (id: string) => {
@@ -183,7 +192,15 @@ export default function Users() {
     const ok = window.confirm("Soft delete this user?");
     if (!ok) return;
 
-    await delUser.mutateAsync(id);
+    try {
+      await delUser.mutateAsync(id);
+      push("success", "User deleted");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to delete user";
+      push("error", message);
+      return;
+    }
 
     if (rows.length === 1 && page > 1) {
       setPage((p) => p - 1);

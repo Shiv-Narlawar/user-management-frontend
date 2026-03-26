@@ -1,11 +1,11 @@
 import React, {
   createContext,
-  useContext,
-  useMemo,
-  useState,
-  useRef,
   useCallback,
+  useContext,
   useEffect,
+  useMemo,
+  useRef,
+  useState,
 } from "react";
 
 export type ToastType = "success" | "error" | "info";
@@ -27,7 +27,7 @@ type ToastContextType = {
 const ToastContext = createContext<ToastContextType | null>(null);
 
 const MAX_TOASTS = 5;
-const DEFAULT_DURATION = 3500;
+const DEFAULT_DURATION = 2500;
 
 function generateId() {
   return crypto.randomUUID();
@@ -49,14 +49,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const push = useCallback(
     (type: ToastType, message: string, duration = DEFAULT_DURATION) => {
-      // 🔥 Prevent duplicate toasts
       setToasts((prev) => {
         const exists = prev.find((t) => t.message === message && t.type === type);
         if (exists) return prev;
 
         const id = generateId();
         const newToast: ToastItem = { id, type, message, duration };
-
         const next = [newToast, ...prev].slice(0, MAX_TOASTS);
 
         const timer = window.setTimeout(() => {
@@ -77,7 +75,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts([]);
   }, []);
 
-  // 🔥 Cleanup on unmount
   useEffect(() => {
     return () => {
       timers.current.forEach((timer) => clearTimeout(timer));
@@ -99,7 +96,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
 
-      {/* Toast UI */}
       <div className="fixed right-4 top-4 z-[9999] space-y-2">
         {toasts.map((t) => (
           <div
@@ -126,8 +122,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 onClick={() => remove(t.id)}
                 className="text-slate-300 hover:text-white"
                 aria-label="Dismiss"
+                type="button"
               >
-                ✕
+                x
               </button>
             </div>
 
