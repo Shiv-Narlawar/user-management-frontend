@@ -1,11 +1,11 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { RequireAuth, RequireRole } from "./routes/guards";
 import { AppShell } from "./components/AppShell";
+import AuthRedirect from "./components/auth/AuthRedirect";
 
 import { useAuth } from "./context/AuthContext";
 
 import Landing from "./pages/auth/Landing";
-import Login from "./pages/auth/Login";
 
 import Dashboard from "./pages/Dashboard";
 import Users from "./pages/Users";
@@ -51,7 +51,7 @@ export default function App() {
         }
       />
 
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<AuthRedirect returnTo="/app" />} />
 
       {/* protected */}
 
