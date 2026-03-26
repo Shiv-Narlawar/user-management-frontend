@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { UserRound, ShieldCheck, ShieldOff } from "lucide-react";
 import api from "../../lib/api";
+import { useToast } from "../../context/ToastContext";
 
 interface User {
   id: string;
@@ -10,6 +11,7 @@ interface User {
 }
 
 export default function Managers() {
+  const { push } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,6 +21,7 @@ export default function Managers() {
       setUsers(res.data);
     } catch (err) {
       console.error("Failed to load users", err);
+      push("error", "Failed to load users");
     } finally {
       setLoading(false);
     }
@@ -31,9 +34,14 @@ export default function Managers() {
   const updateRole = async (id: string, roleName: string) => {
     try {
       await api.put(`/users/${id}`, { roleName });
-      fetchUsers();
+      push(
+        "success",
+        roleName === "MANAGER" ? "User promoted to manager" : "Manager removed"
+      );
+      void fetchUsers();
     } catch (err) {
       console.error("Role update failed", err);
+      push("error", "Role update failed");
     }
   };
 

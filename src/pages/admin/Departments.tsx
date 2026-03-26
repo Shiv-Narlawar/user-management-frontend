@@ -13,6 +13,7 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { apiFetch } from "../../lib/api";
 import type { Role, Status } from "../../types/rbac";
 
@@ -55,6 +56,7 @@ function toList<T>(res: ListResponse<T>): T[] {
 
 export default function Departments() {
   const { user } = useAuth();
+  const { push } = useToast();
   const role: Role = user?.role ?? "USER";
 
   const isAdmin = role === "ADMIN";
@@ -67,7 +69,8 @@ export default function Departments() {
 
   const [loading, setLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState<boolean>(false);
   const [editDept, setEditDept] = useState<Department | null>(null);
@@ -85,12 +88,16 @@ export default function Departments() {
   const [searchUser, setSearchUser] = useState("");
   const [searchManager, setSearchManager] = useState("");
 
+  function clearModalState() {
+    setModalError(null);
+  }
+
   async function loadDepartments() {
     try {
       const deptRes = await apiFetch<ListResponse<Department>>("/departments");
       setDepartments(toList(deptRes));
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to load departments");
+      setPageError(e instanceof Error ? e.message : "Failed to load departments");
     }
   }
 
@@ -115,14 +122,14 @@ export default function Departments() {
         ...remainingPages.flatMap((page) => page.data ?? []),
       ]);
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to load users");
+      setPageError(e instanceof Error ? e.message : "Failed to load users");
     }
   }
 
   async function refreshPageData() {
     try {
       setLoading(true);
-      setErr(null);
+      setPageError(null);
       await Promise.all([loadDepartments(), loadAllUsers()]);
     } finally {
       setLoading(false);
@@ -134,7 +141,9 @@ export default function Departments() {
       const userRes = await apiFetch<ListResponse<UserRow>>("/users/unassigned");
       setAssignableUsers(toList(userRes));
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to load users");
+      const message = e instanceof Error ? e.message : "Failed to load users";
+      setModalError(message);
+      push("error", message);
     }
   }
 
@@ -145,23 +154,25 @@ export default function Departments() {
       );
       setManagers(toList(managerRes));
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to load managers");
+      const message = e instanceof Error ? e.message : "Failed to load managers";
+      setModalError(message);
+      push("error", message);
     }
   }
 
   useEffect(() => {
-    refreshPageData();
+    void refreshPageData();
   }, []);
 
   async function createDepartment() {
     if (!name.trim()) {
-      setErr("Department name is required");
+      setModalError("Department name is required");
       return;
     }
 
     try {
       setActionLoading(true);
-      setErr(null);
+      setModalError(null);
 
       await apiFetch("/departments", {
         method: "POST",
@@ -173,8 +184,12 @@ export default function Departments() {
       setCreateOpen(false);
       setName("");
       await refreshPageData();
+      push("success", "Department created");
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to create department");
+      const message =
+        e instanceof Error ? e.message : "Failed to create department";
+      setModalError(message);
+      push("error", message);
     } finally {
       setActionLoading(false);
     }
@@ -184,13 +199,13 @@ export default function Departments() {
     if (!editDept) return;
 
     if (!editName.trim()) {
-      setErr("Department name is required");
+      setModalError("Department name is required");
       return;
     }
 
     try {
       setActionLoading(true);
-      setErr(null);
+      setModalError(null);
 
       await apiFetch(`/departments/${editDept.id}`, {
         method: "PUT",
@@ -202,8 +217,12 @@ export default function Departments() {
       setEditDept(null);
       setEditName("");
       await refreshPageData();
+      push("success", "Department updated");
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to update department");
+      const message =
+        e instanceof Error ? e.message : "Failed to update department";
+      setModalError(message);
+      push("error", message);
     } finally {
       setActionLoading(false);
     }
@@ -215,21 +234,26 @@ export default function Departments() {
 
     try {
       setActionLoading(true);
-      setErr(null);
+      setPageError(null);
 
       await apiFetch(`/departments/${id}`, {
         method: "DELETE",
       });
 
       await refreshPageData();
+      push("success", "Department deleted");
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to delete department");
+      const message =
+        e instanceof Error ? e.message : "Failed to delete department";
+      setPageError(message);
+      push("error", message);
     } finally {
       setActionLoading(false);
     }
   }
 
   async function openAssignUserModal(dept: Department) {
+    clearModalState();
     setAssignDept(dept);
     setAssignUserId("");
     setSearchUser("");
@@ -237,6 +261,7 @@ export default function Departments() {
   }
 
   async function openAssignManagerModal(dept: Department) {
+    clearModalState();
     setAssignManagerDept(dept);
     setSelectedManagerId("");
     setSearchManager("");
@@ -248,7 +273,7 @@ export default function Departments() {
 
     try {
       setActionLoading(true);
-      setErr(null);
+      setModalError(null);
 
       await apiFetch(`/departments/${assignDept.id}/assign-user`, {
         method: "POST",
@@ -261,8 +286,11 @@ export default function Departments() {
       setAssignUserId("");
       setSearchUser("");
       await refreshPageData();
+      push("success", "User assigned to department");
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to assign user");
+      const message = e instanceof Error ? e.message : "Failed to assign user";
+      setModalError(message);
+      push("error", message);
     } finally {
       setActionLoading(false);
     }
@@ -273,7 +301,7 @@ export default function Departments() {
 
     try {
       setActionLoading(true);
-      setErr(null);
+      setModalError(null);
 
       await apiFetch(`/departments/${assignManagerDept.id}/assign-manager`, {
         method: "POST",
@@ -286,8 +314,12 @@ export default function Departments() {
       setSelectedManagerId("");
       setSearchManager("");
       await refreshPageData();
+      push("success", "Manager assigned to department");
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to assign manager");
+      const message =
+        e instanceof Error ? e.message : "Failed to assign manager";
+      setModalError(message);
+      push("error", message);
     } finally {
       setActionLoading(false);
     }
@@ -348,16 +380,21 @@ export default function Departments() {
           </div>
 
           {isAdmin && (
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button
+              onClick={() => {
+                clearModalState();
+                setCreateOpen(true);
+              }}
+            >
               <Plus size={16} /> Create
             </Button>
           )}
         </div>
       </Card>
 
-      {err && (
+      {pageError && (
         <div className="rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-red-200">
-          {err}
+          {pageError}
         </div>
       )}
 
@@ -458,6 +495,7 @@ export default function Departments() {
                           <Button
                             variant="ghost"
                             onClick={() => {
+                              clearModalState();
                               setEditDept(d);
                               setEditName(d.name);
                             }}
@@ -485,7 +523,14 @@ export default function Departments() {
       </Card>
 
       {createOpen && (
-        <Modal title="Create Department" onClose={() => setCreateOpen(false)}>
+        <Modal
+          title="Create Department"
+          error={modalError}
+          onClose={() => {
+            setCreateOpen(false);
+            clearModalState();
+          }}
+        >
           <Input
             placeholder="Department name"
             value={name}
@@ -495,7 +540,10 @@ export default function Departments() {
           <div className="mt-6 flex justify-end gap-2">
             <Button
               variant="ghost"
-              onClick={() => setCreateOpen(false)}
+              onClick={() => {
+                setCreateOpen(false);
+                clearModalState();
+              }}
               disabled={actionLoading}
             >
               Cancel
@@ -508,7 +556,14 @@ export default function Departments() {
       )}
 
       {editDept && (
-        <Modal title="Edit Department" onClose={() => setEditDept(null)}>
+        <Modal
+          title="Edit Department"
+          error={modalError}
+          onClose={() => {
+            setEditDept(null);
+            clearModalState();
+          }}
+        >
           <Input
             placeholder="Department name"
             value={editName}
@@ -518,7 +573,10 @@ export default function Departments() {
           <div className="mt-6 flex justify-end gap-2">
             <Button
               variant="ghost"
-              onClick={() => setEditDept(null)}
+              onClick={() => {
+                setEditDept(null);
+                clearModalState();
+              }}
               disabled={actionLoading}
             >
               Cancel
@@ -533,7 +591,11 @@ export default function Departments() {
       {assignDept && (
         <Modal
           title={`Assign user to ${assignDept.name}`}
-          onClose={() => setAssignDept(null)}
+          error={modalError}
+          onClose={() => {
+            setAssignDept(null);
+            clearModalState();
+          }}
         >
           <Input
             placeholder="Search user..."
@@ -567,7 +629,10 @@ export default function Departments() {
           <div className="mt-6 flex justify-end gap-2">
             <Button
               variant="ghost"
-              onClick={() => setAssignDept(null)}
+              onClick={() => {
+                setAssignDept(null);
+                clearModalState();
+              }}
               disabled={actionLoading}
             >
               Cancel
@@ -585,7 +650,11 @@ export default function Departments() {
       {assignManagerDept && (
         <Modal
           title={`Assign manager to ${assignManagerDept.name}`}
-          onClose={() => setAssignManagerDept(null)}
+          error={modalError}
+          onClose={() => {
+            setAssignManagerDept(null);
+            clearModalState();
+          }}
         >
           <Input
             placeholder="Search manager..."
@@ -619,7 +688,10 @@ export default function Departments() {
           <div className="mt-6 flex justify-end gap-2">
             <Button
               variant="ghost"
-              onClick={() => setAssignManagerDept(null)}
+              onClick={() => {
+                setAssignManagerDept(null);
+                clearModalState();
+              }}
               disabled={actionLoading}
             >
               Cancel
@@ -704,7 +776,7 @@ export default function Departments() {
 
                   const selectedDepartment = viewDept;
                   setViewDept(null);
-                  openAssignUserModal(selectedDepartment);
+                  void openAssignUserModal(selectedDepartment);
                 }}
                 disabled={actionLoading}
               >
@@ -725,10 +797,12 @@ export default function Departments() {
 function Modal({
   title,
   children,
+  error,
   onClose,
 }: {
   title: string;
   children: ReactNode;
+  error?: string | null;
   onClose: () => void;
 }) {
   return (
@@ -744,11 +818,19 @@ function Modal({
             className="text-sm text-slate-400 hover:text-white"
             type="button"
           >
-            ✕
+            x
           </button>
         </div>
 
-        <div className="mt-4">{children}</div>
+        <div className="mt-4">
+          {error && (
+            <div className="mb-4 rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {error}
+            </div>
+          )}
+
+          {children}
+        </div>
       </div>
     </div>
   );
