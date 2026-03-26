@@ -4,11 +4,13 @@ import { useAuth } from "../context/AuthContext";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
+import { Modal } from "../components/ui/Modal";
 
 import type { Role, Status } from "../types/rbac";
 import type { UserRow } from "../services/users.api";
 
 import {
+  useCreateUserMutation,
   useDeleteUserMutation,
   useUpdateUserStatusMutation,
   useUsersQuery,
@@ -27,6 +29,14 @@ type UsersResponse = {
   data: UserRow[];
   total: number;
   totalPages: number;
+};
+
+type InvitationResult = {
+  user: UserRow;
+  invitation: {
+    emailSent: boolean;
+    appLoginLink: string | null;
+  };
 };
 
 export default function Users() {
@@ -61,6 +71,7 @@ export default function Users() {
   const departmentsQuery = useDepartmentsQuery();
 
   const updateUser = useUpdateUserStatusMutation();
+  const createUser = useCreateUserMutation();
   const delUser = useDeleteUserMutation();
 
   const data = usersQuery.data as UsersResponse | undefined;
@@ -74,6 +85,16 @@ export default function Users() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [createdInvite, setCreatedInvite] = useState<InvitationResult | null>(
+    null
+  );
+
+  const [createName, setCreateName] = useState("");
+  const [createEmail, setCreateEmail] = useState("");
+  const [createRole, setCreateRole] = useState<Role>("USER");
+  const [createDepartmentId, setCreateDepartmentId] = useState("");
 
   const [editStatus, setEditStatus] = useState<Status>("ACTIVE");
   const [editDepartmentId, setEditDepartmentId] = useState("");
@@ -99,6 +120,35 @@ export default function Users() {
     setEditDepartmentId("");
     setEditStatus("ACTIVE");
     setEditRole("USER");
+  }
+
+  function closeCreate() {
+    if (createUser.isPending) return;
+
+    setCreateOpen(false);
+    setCreateName("");
+    setCreateEmail("");
+    setCreateRole("USER");
+    setCreateDepartmentId("");
+  }
+
+  async function handleCreateUser() {
+    const payload = {
+      name: createName.trim(),
+      email: createEmail.trim(),
+      role: createRole,
+      departmentId: createDepartmentId || undefined,
+    };
+
+    const result = await createUser.mutateAsync(payload);
+
+    closeCreate();
+    setCreatedInvite(result);
+    setInviteOpen(true);
+  }
+
+  async function copyText(value: string) {
+    await navigator.clipboard.writeText(value);
   }
 
   const saveEdit = async () => {
@@ -165,6 +215,9 @@ export default function Users() {
     (updateUser.isError
       ? (updateUser.error as Error | null)?.message
       : null) ||
+    (createUser.isError
+      ? (createUser.error as Error | null)?.message
+      : null) ||
     (delUser.isError
       ? (delUser.error as Error | null)?.message
       : null) ||
@@ -224,6 +277,10 @@ export default function Users() {
                   <option value="ASC">Oldest First</option>
                 </select>
               </>
+            )}
+
+            {isAdmin && (
+              <Button onClick={() => setCreateOpen(true)}>Create User</Button>
             )}
           </div>
         </div>
@@ -354,8 +411,8 @@ export default function Users() {
 
       {/* EDIT MODAL */}
       {editOpen && editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <Card className="w-full max-w-md p-6">
+        <Modal open={editOpen} title="Edit User" onClose={closeEdit}>
+          <Card className="w-full max-w-md border-0 bg-transparent p-0 shadow-none">
             <div className="text-lg font-bold mb-4">
               Edit User
             </div>
@@ -455,8 +512,127 @@ export default function Users() {
               </Button>
             </div>
           </Card>
-        </div>
+        </Modal>
       )}
+
+      <Modal open={createOpen} title="Create User" onClose={closeCreate}>
+        <div className="space-y-4">
+          <Input
+            label="Name"
+            value={createName}
+            onChange={(e) => setCreateName(e.target.value)}
+            placeholder="Enter full name"
+          />
+
+          <Input
+            label="Email"
+            type="email"
+            value={createEmail}
+            onChange={(e) => setCreateEmail(e.target.value)}
+            placeholder="name@company.com"
+          />
+
+          <div>
+            <div className="mb-2 text-sm text-slate-300">Role</div>
+            <select
+              value={createRole}
+              onChange={(e) => setCreateRole(e.target.value as Role)}
+              className="w-full rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-100"
+            >
+              <option value="USER">USER</option>
+              <option value="MANAGER">MANAGER</option>
+            </select>
+          </div>
+
+          <div>
+            <div className="mb-2 text-sm text-slate-300">Department</div>
+            <select
+              value={createDepartmentId}
+              onChange={(e) => setCreateDepartmentId(e.target.value)}
+              className="w-full rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-100"
+            >
+              <option value="">Unassigned</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-xs text-slate-400">
+            Auth0 will send the user a password setup email. After they set their
+            password, they can use the app login link to sign in.
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={closeCreate}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateUser}
+              disabled={
+                createUser.isPending ||
+                !createName.trim() ||
+                !createEmail.trim()
+              }
+            >
+              {createUser.isPending ? "Creating..." : "Create"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={inviteOpen && !!createdInvite}
+        title="Invitation Ready"
+        onClose={() => setInviteOpen(false)}
+      >
+        {createdInvite && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              {createdInvite.user.email} was created successfully and Auth0 has
+              sent the password setup email.
+            </div>
+
+            {createdInvite.invitation.appLoginLink && (
+              <div>
+                <div className="mb-2 text-sm text-slate-300">App login link</div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-xs text-slate-300 break-all">
+                  {createdInvite.invitation.appLoginLink}
+                </div>
+                <div className="mt-3 flex gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      copyText(createdInvite.invitation.appLoginLink as string)
+                    }
+                  >
+                    Copy Login Link
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      window.open(
+                        createdInvite.invitation.appLoginLink as string,
+                        "_blank",
+                        "noopener,noreferrer"
+                      )
+                    }
+                  >
+                    Open Login
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-3 text-xs text-slate-400">
+              The user should check their email, set a password from the Auth0
+              email, and then log in using the app link.
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
