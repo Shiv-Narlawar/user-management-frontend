@@ -1,7 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import type { Role } from "../types/rbac";
-import LoginPage from "../pages/auth/Login";
+import AuthRedirect from "../components/auth/AuthRedirect";
 
 // auth
 export function RequireAuth() {
@@ -16,7 +16,7 @@ export function RequireAuth() {
   }
 
   if (!user) {
-    return <LoginPage returnTo={window.location.pathname} />;
+    return <AuthRedirect returnTo={window.location.pathname} />;
   }
 
   return <Outlet />;
@@ -35,7 +35,7 @@ export function RequireRole({ role }: { role: Role }) {
   }
 
   if (!user) {
-    return <LoginPage returnTo={window.location.pathname} />;
+    return <AuthRedirect returnTo={window.location.pathname} />;
   }
 
   // admin bypass
