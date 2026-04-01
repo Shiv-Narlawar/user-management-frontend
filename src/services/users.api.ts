@@ -23,6 +23,21 @@ export interface UsersResponse {
   totalPages: number;
 }
 
+export interface CreateUserPayload {
+  name: string;
+  email: string;
+  role: Role;
+  departmentId?: string;
+}
+
+export interface CreateUserResponse {
+  user: UserRow;
+  invitation: {
+    emailSent: boolean;
+    appLoginLink: string | null;
+  };
+}
+
 export async function getUsers(params: {
   search?: string;
   role?: Role;
@@ -51,8 +66,8 @@ export async function getUsers(params: {
   }
 
   if (params.sort) {
-  qs.append("sort", params.sort);
-}
+    qs.append("sort", params.sort);
+  }
 
   qs.append("page", String(params.page));
   qs.append("limit", String(params.limit));
@@ -63,6 +78,15 @@ export async function getUsers(params: {
 export async function getAssignableUsers(): Promise<UserRow[]> {
   const res = await apiFetch<{ data: UserRow[] }>("/users/unassigned");
   return res.data;
+}
+
+export async function createUser(
+  payload: CreateUserPayload
+): Promise<CreateUserResponse> {
+  return apiFetch<CreateUserResponse>("/users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function updateUserStatus(payload: {
