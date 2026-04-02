@@ -5,7 +5,7 @@ import {
   Users,
   KeyRound,
   Settings,
-  UserRound,
+  //UserRound,
   ClipboardList,
   LogOut,
   Building2,
@@ -140,12 +140,6 @@ export function AppShell() {
       to: "/app/departments",
       label: "Departments",
       icon: <Building2 size={18} />,
-    });
-
-    nav.push({
-      to: "/app/roles",
-      label: "Roles",
-      icon: <UserRound size={18} />,
     });
 
     nav.push({

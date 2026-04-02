@@ -40,6 +40,17 @@ function norm(s: string) {
   return s.trim().toLowerCase();
 }
 
+const ROLE_ALLOWED_PERMISSIONS: Record<string, string[] | null> = {
+  ADMIN: null,
+  MANAGER: [
+    "USER_VIEW",
+    "USER_UPDATE",
+    "DEPARTMENT_VIEW",
+    "DEPARTMENT_ASSIGN_USER",
+  ],
+  USER: ["USER_VIEW"],
+};
+
 export default function Permissions() {
   const { push } = useToast();
 
@@ -60,7 +71,9 @@ export default function Permissions() {
 
     try {
       const rolesRes = (await apiFetch("/roles")) as ListResponse<RoleRow>;
-      const permsRes = (await apiFetch("/permissions")) as ListResponse<PermissionRow>;
+      const permsRes = (await apiFetch(
+        "/permissions"
+      )) as ListResponse<PermissionRow>;
 
       const rolesList = Array.isArray(rolesRes) ? rolesRes : rolesRes.data ?? [];
       const permsList = Array.isArray(permsRes) ? permsRes : permsRes.data ?? [];
@@ -132,35 +145,6 @@ export default function Permissions() {
     });
   }
 
-  // Save permissions
-  async function save() {
-    if (!roleId) return;
-
-    setSaving(true);
-
-    try {
-      const permissionNames = permissions
-        .filter((p) => selectedIds.has(String(p.id)))
-        .map((p) => p.name);
-
-      await apiFetch(`/roles/${roleId}/permissions`, {
-        method: "PUT",
-        body: JSON.stringify({
-          permissions: permissionNames,
-        }),
-      });
-
-      push("success", "Permissions updated successfully");
-
-      await loadRolePermissions(roleId);
-    } catch (err) {
-      console.error(err);
-      push("error", "Failed to update permissions");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   const parsed = useMemo<ParsedPermission[]>(() => {
     return permissions.map((p) => {
       const { module, action } = parsePermissionName(p.name);
@@ -201,6 +185,63 @@ export default function Permissions() {
     () => filtered.map((p) => String(p.id)),
     [filtered]
   );
+
+  const selectedRole = useMemo(
+    () => roles.find((role) => String(role.id) === roleId),
+    [roles, roleId]
+  );
+
+  const allowedPermissionNames = useMemo(() => {
+    const roleName = selectedRole?.name?.toUpperCase();
+
+    if (!roleName) return null;
+
+    return ROLE_ALLOWED_PERMISSIONS[roleName] ?? null;
+  }, [selectedRole]);
+
+  const editablePermissionIds = useMemo(() => {
+    if (!allowedPermissionNames) return visiblePermissionIds;
+
+    const allowed = new Set(allowedPermissionNames);
+
+    return filtered
+      .filter((permission) => allowed.has(permission.name))
+      .map((permission) => String(permission.id));
+  }, [allowedPermissionNames, filtered, visiblePermissionIds]);
+
+  // Save permissions
+  async function save() {
+    if (!roleId) return;
+
+    setSaving(true);
+
+    try {
+      const allowed = allowedPermissionNames
+        ? new Set(allowedPermissionNames)
+        : null;
+
+      const permissionNames = permissions
+        .filter((p) => selectedIds.has(String(p.id)))
+        .filter((p) => !allowed || allowed.has(p.name))
+        .map((p) => p.name);
+
+      await apiFetch(`/roles/${roleId}/permissions`, {
+        method: "PUT",
+        body: JSON.stringify({
+          permissions: permissionNames,
+        }),
+      });
+
+      push("success", "Permissions updated successfully");
+
+      await loadRolePermissions(roleId);
+    } catch (err) {
+      console.error(err);
+      push("error", "Failed to update permissions");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -254,14 +295,14 @@ export default function Permissions() {
 
               <Button
                 variant="ghost"
-                onClick={() => setMany(visiblePermissionIds, true)}
+                onClick={() => setMany(editablePermissionIds, true)}
               >
                 Select All
               </Button>
 
               <Button
                 variant="ghost"
-                onClick={() => setMany(visiblePermissionIds, false)}
+                onClick={() => setMany(editablePermissionIds, false)}
               >
                 Clear
               </Button>
@@ -295,14 +336,31 @@ export default function Permissions() {
 
                   if (!p) {
                     return (
-                      <td key={act} className="px-4 py-3 text-slate-600">
-                        —
+                      <td
+                        key={act}
+                        className="px-4 py-3 text-center text-xs text-slate-600"
+                      >
+                        -
                       </td>
                     );
                   }
 
                   const id = String(p.id);
                   const checked = selectedIds.has(id);
+                  const isAllowed =
+                    !allowedPermissionNames ||
+                    allowedPermissionNames.includes(p.name);
+
+                  if (!isAllowed) {
+                    return (
+                      <td
+                        key={act}
+                        className="px-4 py-3 text-center text-xs text-slate-600"
+                      >
+                        -
+                      </td>
+                    );
+                  }
 
                   return (
                     <td key={act} className="px-4 py-3">

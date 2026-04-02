@@ -3,6 +3,16 @@ import { getAuth0Token } from "./auth0Token";
 export const BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:7000/api";
 
+export class ApiFetchError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiFetchError";
+    this.status = status;
+  }
+}
+
 export async function apiFetch<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
@@ -46,7 +56,7 @@ export async function apiFetch<T = unknown>(
       console.warn("unauthorized");
     }
 
-    throw new Error(message);
+    throw new ApiFetchError(response.status, message);
   }
 
   // empty

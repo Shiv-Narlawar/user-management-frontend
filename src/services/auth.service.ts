@@ -14,13 +14,8 @@ export interface AuthUser {
 
 // me
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  try {
-    const user = (await apiFetch("/auth/me")) as AuthUser;
-    return user ?? null;
-  } catch (err) {
-    console.error("failed to fetch user", err);
-    return null;
-  }
+  const user = (await apiFetch("/auth/me")) as AuthUser;
+  return user ?? null;
 }
 
 export async function changePassword(email: string): Promise<void> {

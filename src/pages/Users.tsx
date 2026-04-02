@@ -226,20 +226,20 @@ export default function Users() {
   const isEditingSelf = editing?.id === user?.id;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* HEADER */}
-      <Card className="p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
+      <Card className="p-5 sm:p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="space-y-1">
             <div className="text-3xl font-extrabold text-slate-100">
               {title}
             </div>
-            <div className="mt-1 text-sm text-slate-400">
+            <div className="text-sm text-slate-400">
               {subtitle}
             </div>
           </div>
 
-          <div className="flex gap-3 w-full md:w-auto">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap xl:w-auto xl:justify-end">
             <Input
               value={q}
               onChange={(e) => {
@@ -247,7 +247,7 @@ export default function Users() {
                 setPage(1);
               }}
               placeholder="Search name or email..."
-              className="w-full md:w-72"
+              className="w-full sm:min-w-[260px] xl:w-72"
             />
 
             {isAdmin && (
@@ -258,9 +258,10 @@ export default function Users() {
                     setRoleFilter(e.target.value as Role | "ALL");
                     setPage(1);
                   }}
-                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                  className="min-h-[42px] rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
                 >
                   <option value="ALL">All Roles</option>
+                  <option value="ADMIN">Admins</option>
                   <option value="USER">Users</option>
                   <option value="MANAGER">Managers</option>
                 </select>
@@ -271,7 +272,7 @@ export default function Users() {
                     setSortOrder(e.target.value as "ASC" | "DESC");
                     setPage(1);
                   }}
-                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                  className="min-h-[42px] rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
                 >
                   <option value="DESC">Newest First</option>
                   <option value="ASC">Oldest First</option>
@@ -412,26 +413,26 @@ export default function Users() {
       {/* EDIT MODAL */}
       {editOpen && editing && (
         <Modal open={editOpen} title="Edit User" onClose={closeEdit}>
-          <Card className="w-full max-w-md border-0 bg-transparent p-0 shadow-none">
-            <div className="text-lg font-bold mb-4">
+          <div className="w-full max-w-md space-y-5">
+            <div className="text-lg font-bold text-slate-100">
               Edit User
             </div>
 
             {isAdmin && isEditingSelf && (
-              <div className="text-xs text-yellow-400 mb-2">
+              <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-xs text-yellow-300">
                 You cannot modify your own account.
               </div>
             )}
 
             <div className="space-y-4">
-              <div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-3">
                 <div className="text-sm text-slate-400">Name</div>
-                <div className="text-slate-100">{editing.name}</div>
+                <div className="mt-1 text-slate-100">{editing.name}</div>
               </div>
 
-              <div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 px-4 py-3">
                 <div className="text-sm text-slate-400">Email</div>
-                <div className="text-slate-100">{editing.email}</div>
+                <div className="mt-1 text-slate-100 break-all">{editing.email}</div>
               </div>
 
               <div>
@@ -442,7 +443,7 @@ export default function Users() {
                   onChange={(e) =>
                     setEditStatus(e.target.value as Status)
                   }
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
                 >
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="INACTIVE">INACTIVE</option>
@@ -462,8 +463,9 @@ export default function Users() {
                       onChange={(e) =>
                         setEditRole(e.target.value as Role)
                       }
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
                     >
+                      <option value="ADMIN">ADMIN</option>
                       <option value="USER">USER</option>
                       <option value="MANAGER">MANAGER</option>
                     </select>
@@ -480,7 +482,7 @@ export default function Users() {
                       onChange={(e) =>
                         setEditDepartmentId(e.target.value)
                       }
-                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2"
+                      className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100"
                     >
                       <option value="">Unassigned</option>
 
@@ -511,12 +513,12 @@ export default function Users() {
                 {updateUser.isPending ? "Saving..." : "Save"}
               </Button>
             </div>
-          </Card>
+          </div>
         </Modal>
       )}
 
       <Modal open={createOpen} title="Create User" onClose={closeCreate}>
-        <div className="space-y-4">
+        <div className="w-full max-w-md space-y-5">
           <Input
             label="Name"
             value={createName}
@@ -539,6 +541,7 @@ export default function Users() {
               onChange={(e) => setCreateRole(e.target.value as Role)}
               className="w-full rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-2 text-sm text-slate-100"
             >
+              <option value="ADMIN">ADMIN</option>
               <option value="USER">USER</option>
               <option value="MANAGER">MANAGER</option>
             </select>
@@ -589,7 +592,7 @@ export default function Users() {
         onClose={() => setInviteOpen(false)}
       >
         {createdInvite && (
-          <div className="space-y-4">
+          <div className="w-full max-w-md space-y-5">
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
               {createdInvite.user.email} was created successfully and Auth0 has
               sent the password setup email.
@@ -601,7 +604,7 @@ export default function Users() {
                 <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-xs text-slate-300 break-all">
                   {createdInvite.invitation.appLoginLink}
                 </div>
-                <div className="mt-3 flex gap-3">
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
                   <Button
                     variant="secondary"
                     onClick={() =>

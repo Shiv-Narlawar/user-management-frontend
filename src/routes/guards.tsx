@@ -5,7 +5,7 @@ import AuthRedirect from "../components/auth/AuthRedirect";
 
 // auth
 export function RequireAuth() {
-  const { user, loading } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
 
   if (loading) {
     return (
@@ -16,6 +16,10 @@ export function RequireAuth() {
   }
 
   if (!user) {
+    if (isAuthenticated) {
+      return <Navigate to="/" replace />;
+    }
+
     return <AuthRedirect returnTo={window.location.pathname} />;
   }
 
@@ -24,7 +28,7 @@ export function RequireAuth() {
 
 // role
 export function RequireRole({ role }: { role: Role }) {
-  const { user, loading } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
 
   if (loading) {
     return (
@@ -35,6 +39,10 @@ export function RequireRole({ role }: { role: Role }) {
   }
 
   if (!user) {
+    if (isAuthenticated) {
+      return <Navigate to="/" replace />;
+    }
+
     return <AuthRedirect returnTo={window.location.pathname} />;
   }
 
